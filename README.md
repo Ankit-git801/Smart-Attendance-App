@@ -10,15 +10,7 @@ A modern, offline-first attendance tracking application for Android, built with 
 
 ## 📸 Screenshots
 
-*(**Instructions for you:** Take screenshots of your app's main screens and place them in a folder named `screenshots` in your project's root directory. Then, uncomment the lines below and update the paths.)*
-
-| **Home Screen**                                       | **Add/Edit Subject Screen**                               |
-| ----------------------------------------------------- | --------------------------------------------------------- |
-| ![Home Screen](screenshots/home.png) | ![Add/Edit Screen](screenshots/add_edit.png) |
-
-| **Subject Detail Screen**                             | **Statistics Screen**                                     |
-| ----------------------------------------------------- | --------------------------------------------------------- |
-| ![Detail Screen](screenshots/detail.png) | ![Stats Screen](screenshots/stats.png) |
+*Screenshots of the application will be added here soon.*
 
 ---
 
@@ -82,29 +74,27 @@ To get a local copy up and running, follow these simple steps.
 Distributed under the MIT License. See `LICENSE` for more information.
 ```
 
-### **✅ STEP 2: Update Your `README.md` File**
+### **✅ STEP 3: Commit Your Changes**
 
-1.  In your Android Studio project, find the `README.md` file in the project's root directory and open it.
-2.  Delete any existing content in that file.
-3.  **Paste** the content you copied from Step 1 into this file.
-4.  Save the file.
+1.  **Paste the code** into the editor on the GitHub page.
 
-### **✅ STEP 3: Push the New README to GitHub**
+2.  **Scroll down** to the bottom of the page. You will see a section titled **"Commit changes"**.
 
-Now, let's update your GitHub repository with this new, professional README.
+3.  In the first text box, type a clear commit message, for example: `Docs: Create professional README file`.
 
-1.  Open the **Terminal** in Android Studio.
-2.  **Stage the `README.md` file:**
-    ```bash
-    git add README.md
-    ```
-3.  **Commit the change with a message:**
-    ```bash
-    git commit -m "Docs: Create professional README file"
-    ```
-4.  **Push the commit to GitHub:**
-    ```bash
-    git push
-    ```
+4.  Make sure the option **"Commit directly to the `main` branch"** is selected.
 
-Once the push is complete, refresh your GitHub repository page. You will now see your new, detailed README, which does a much better job of showcasing the hard work you've put into this project. Congratulations
+5.  Click the green **"Commit changes"** button.
+
+    [1341]
+
+Your repository's `README.md` file is now updated.
+
+### **Important Final Step: Update Your Local Project**
+
+Because you made a change on GitHub, your local copy of the project is now out of date. To sync it, open the **Terminal** in Android Studio and run one final command:
+
+```bash
+git pull origin main
+```
+This will download the new `README.md` to your local project, ensuring everything is perfectly in sync.
