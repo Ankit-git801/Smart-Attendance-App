@@ -1,8 +1,11 @@
 package com.ankit.smartattendance
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,42 +27,51 @@ import com.ankit.smartattendance.ui.settings.SettingsScreen
 import com.ankit.smartattendance.ui.statistics.StatisticsScreen
 import com.ankit.smartattendance.ui.subjectdetail.SubjectDetailScreen
 import com.ankit.smartattendance.ui.theme.SmartAttendanceTheme
+import com.ankit.smartattendance.utils.NotificationHelper
 import com.ankit.smartattendance.viewmodel.AppViewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NotificationHelper.createNotificationChannel(this)
         setContent {
-            SmartAttendanceTheme {
-                SmartAttendanceApp()
+            val appViewModel: AppViewModel = viewModel()
+            val theme by appViewModel.theme.collectAsState()
+            val useDarkTheme = when (theme) {
+                "Light" -> false
+                "Dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            SmartAttendanceTheme(darkTheme = useDarkTheme) {
+                RequestNotificationPermission()
+                SmartAttendanceApp(appViewModel = appViewModel)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun RequestNotificationPermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val permissionState = rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS)
+        LaunchedEffect(Unit) {
+            if (!permissionState.status.isGranted) {
+                permissionState.launchPermissionRequest()
             }
         }
     }
 }
 
 @Composable
-fun SmartAttendanceApp() {
+fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
-    val appViewModel: AppViewModel = viewModel()
-
-    // Determine if the FAB should be shown based on the current screen
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-    val showFab = currentRoute == BottomNavItem.Home.route
-
     Scaffold(
-        bottomBar = {
-            BottomNavigationBar(navController = navController)
-        },
-        floatingActionButton = {
-            if (showFab) {
-                FloatingActionButton(
-                    onClick = { navController.navigate("add_subject") }
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = "Add Subject")
-                }
-            }
-        }
+        bottomBar = { BottomNavigationBar(navController = navController) }
+        // The FloatingActionButton has been removed from here
     ) { innerPadding ->
         AppNavigation(
             navController = navController,
@@ -136,11 +148,7 @@ fun BottomNavigationBar(navController: NavHostController) {
     }
 }
 
-sealed class BottomNavItem(
-    val route: String,
-    val title: String,
-    val icon: ImageVector
-) {
+sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem("home", "Home", Icons.Default.Home)
     object Calendar : BottomNavItem("calendar", "Calendar", Icons.Default.Today)
     object Statistics : BottomNavItem("statistics", "Stats", Icons.Default.Analytics)
