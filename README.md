@@ -73,28 +73,3 @@ To get a local copy up and running, follow these simple steps.
 
 Distributed under the MIT License. See `LICENSE` for more information.
 ```
-
-### **✅ STEP 3: Commit Your Changes**
-
-1.  **Paste the code** into the editor on the GitHub page.
-
-2.  **Scroll down** to the bottom of the page. You will see a section titled **"Commit changes"**.
-
-3.  In the first text box, type a clear commit message, for example: `Docs: Create professional README file`.
-
-4.  Make sure the option **"Commit directly to the `main` branch"** is selected.
-
-5.  Click the green **"Commit changes"** button.
-
-    [1341]
-
-Your repository's `README.md` file is now updated.
-
-### **Important Final Step: Update Your Local Project**
-
-Because you made a change on GitHub, your local copy of the project is now out of date. To sync it, open the **Terminal** in Android Studio and run one final command:
-
-```bash
-git pull origin main
-```
-This will download the new `README.md` to your local project, ensuring everything is perfectly in sync.
