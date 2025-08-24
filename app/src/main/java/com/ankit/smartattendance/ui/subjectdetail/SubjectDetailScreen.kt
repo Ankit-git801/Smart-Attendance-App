@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewModel: AppViewModel) {
     val coroutineScope = rememberCoroutineScope()
     var subject by remember { mutableStateOf<Subject?>(null) }
-    var stats by remember { mutableStateOf(Pair(0.0, 0)) }
+    var stats by remember { mutableStateOf(Pair(0.0, 0)) } // Default to 0.0 percentage and 0 total classes
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
 
@@ -49,7 +49,13 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             subject = appViewModel.getSubjectById(subjectId)
             val total = appViewModel.getTotalClassesForSubject(subjectId)
             val present = appViewModel.getPresentClassesForSubject(subjectId)
-            stats = Pair(if (total > 0) (present.toDouble() / total) * 100 else 100.0, total)
+            // THIS IS THE FIX: Check if total is greater than 0 before dividing
+            val percentage = if (total > 0) {
+                (present.toDouble() / total) * 100
+            } else {
+                0.0 // Default to 0.0 if no classes are recorded
+            }
+            stats = Pair(percentage, total)
         }
     }
 
@@ -131,7 +137,9 @@ private fun ManualAddAttendanceDialog(
             Button(onClick = {
                 val present = presentCount.toIntOrNull() ?: 0
                 val absent = absentCount.toIntOrNull() ?: 0
-                onConfirm(present, absent)
+                if (present > 0 || absent > 0) { // Only confirm if there's input
+                    onConfirm(present, absent)
+                }
             }) {
                 Text("Save")
             }
@@ -156,7 +164,13 @@ private fun AttendanceProgressCard(subjectName: String, percentage: Double, targ
                 Column(horizontalAlignment = Alignment.End) { Text("Target: $target%", style = MaterialTheme.typography.titleLarge) }
             }
             Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(progress = { (percentage / 100).toFloat() }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape))
+            LinearProgressIndicator(
+                progress = (percentage / 100).toFloat(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape)
+            )
         }
     }
 }
@@ -177,7 +191,11 @@ private fun AttendanceCalendar(records: List<AttendanceRecord>) {
             else -> ErrorRed.copy(alpha = 0.4f)
         }
         Box(
-            Modifier.aspectRatio(1f).padding(2.dp).clip(CircleShape).background(color = dayBackgroundColor),
+            Modifier
+                .aspectRatio(1f)
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(color = dayBackgroundColor),
             contentAlignment = Alignment.Center
         ) {
             Text(text = day.date.dayOfMonth.toString())

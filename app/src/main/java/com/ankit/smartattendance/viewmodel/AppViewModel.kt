@@ -57,7 +57,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markAttendance(subjectId: Long, scheduleId: Long?, isPresent: Boolean) {
         viewModelScope.launch {
-            val record = AttendanceRecord(subjectId = subjectId, scheduleId = scheduleId, date = LocalDate.now().toEpochDay(), isPresent = isPresent)
+            val record = AttendanceRecord(
+                subjectId = subjectId,
+                scheduleId = scheduleId,
+                date = LocalDate.now().toEpochDay(),
+                isPresent = isPresent,
+                note = "Marked from Home"
+            )
             attendanceDao.insertAttendanceRecord(record)
         }
     }
@@ -110,6 +116,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             attendanceDao.deleteAllSubjects()
             attendanceDao.deleteAllAttendanceRecords()
         }
+    }
+
+    // NEW FUNCTION
+    fun isAttendanceMarkedForToday(scheduleId: Long): Flow<Boolean> {
+        val today = LocalDate.now().toEpochDay()
+        return attendanceDao.isAttendanceMarkedForSchedule(scheduleId, today)
     }
 
     suspend fun getSubjectById(subjectId: Long): Subject? = attendanceDao.getSubjectById(subjectId)

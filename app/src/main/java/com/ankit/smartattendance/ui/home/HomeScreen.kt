@@ -1,5 +1,6 @@
 package com.ankit.smartattendance.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -89,7 +90,10 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 }
             } else {
                 items(todaysSchedule, key = { "schedule_${it.schedule.id}" }) { scheduleWithSubject ->
-                    TodayScheduleCard(scheduleWithSubject)
+                    TodayScheduleCard(
+                        scheduleWithSubject = scheduleWithSubject,
+                        appViewModel = appViewModel
+                    )
                 }
             }
 
@@ -121,7 +125,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class) // ANNOTATION ADDED HERE
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExtraClassDialog(
     subjects: List<Subject>,
@@ -130,7 +134,6 @@ private fun ExtraClassDialog(
 ) {
     var selectedSubjectId by remember { mutableStateOf(subjects.firstOrNull()?.id) }
     var expanded by remember { mutableStateOf(false) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mark Extra Class") },
@@ -173,6 +176,7 @@ private fun ExtraClassDialog(
                 Button(
                     onClick = {
                         selectedSubjectId?.let { onConfirm(it, true) }
+                        onDismiss() // THIS LINE IS THE FIX
                     },
                     enabled = selectedSubjectId != null
                 ) {
@@ -182,6 +186,7 @@ private fun ExtraClassDialog(
                 Button(
                     onClick = {
                         selectedSubjectId?.let { onConfirm(it, false) }
+                        onDismiss() // THIS LINE IS THE FIX
                     },
                     enabled = selectedSubjectId != null,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -199,27 +204,68 @@ private fun ExtraClassDialog(
 }
 
 @Composable
-fun TodayScheduleCard(scheduleWithSubject: ScheduleWithSubject) {
+fun TodayScheduleCard(
+    scheduleWithSubject: ScheduleWithSubject,
+    appViewModel: AppViewModel
+) {
     val subject = scheduleWithSubject.subject
     val schedule = scheduleWithSubject.schedule
     val startTime = formatTime(schedule.startHour, schedule.startMinute)
     val endTime = formatTime(schedule.endHour, schedule.endMinute)
 
+    val isMarked by appViewModel.isAttendanceMarkedForToday(schedule.id).collectAsState(initial = false)
+
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(subject.color)))
-            )
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(text = subject.name, fontWeight = FontWeight.Bold)
-                Text(text = "$startTime - $endTime")
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(android.graphics.Color.parseColor(subject.color)))
+                )
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = subject.name, fontWeight = FontWeight.Bold)
+                    Text(text = "$startTime - $endTime")
+                }
+            }
+            AnimatedVisibility(visible = !isMarked) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { appViewModel.markAttendance(subject.id, schedule.id, false) },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text("Absent")
+                    }
+                    Button(
+                        onClick = { appViewModel.markAttendance(subject.id, schedule.id, true) }
+                    ) {
+                        Text("Present")
+                    }
+                }
+            }
+            AnimatedVisibility(visible = isMarked) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        "Marked",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
