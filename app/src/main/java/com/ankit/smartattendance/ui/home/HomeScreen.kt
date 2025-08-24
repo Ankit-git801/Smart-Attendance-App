@@ -88,7 +88,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                     )
                 }
             } else {
-                // ** THE FIX IS APPLIED HERE **
                 items(todaysSchedule, key = { "schedule_${it.schedule.id}" }) { scheduleWithSubject ->
                     TodayScheduleCard(
                         scheduleWithSubject = scheduleWithSubject,
@@ -121,7 +120,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                     )
                 }
             } else {
-                // ** THE FIX IS APPLIED HERE **
                 items(subjects, key = { "subject_${it.id}" }) { subject ->
                     SubjectCard(subject = subject, appViewModel = appViewModel) {
                         navController.navigate("subject_detail/${subject.id}")
@@ -215,6 +213,7 @@ fun TodayScheduleCard(scheduleWithSubject: ScheduleWithSubject, onMark: (Boolean
     val schedule = scheduleWithSubject.schedule
     val startTime = formatTime(schedule.startHour, schedule.startMinute)
     val endTime = formatTime(schedule.endHour, schedule.endMinute)
+    val subjectColor = Color(android.graphics.Color.parseColor(subject.color))
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -224,9 +223,9 @@ fun TodayScheduleCard(scheduleWithSubject: ScheduleWithSubject, onMark: (Boolean
             ) {
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(10.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .background(subjectColor)
                 )
                 Spacer(Modifier.width(16.dp))
                 Column {
@@ -284,9 +283,9 @@ fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Uni
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(10.dp)
                     .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(subject.color)).copy(alpha = 0.3f))
+                    .background(Color(android.graphics.Color.parseColor(subject.color)))
             )
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {

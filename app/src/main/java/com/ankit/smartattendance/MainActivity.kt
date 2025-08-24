@@ -1,8 +1,13 @@
 package com.ankit.smartattendance
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -20,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -43,9 +49,6 @@ import com.google.accompanist.permissions.rememberPermissionState
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // This enables the edge-to-edge display from our Theme.kt
-        // WindowCompat.setDecorFitsSystemWindows(window, false) // This is now handled in Theme.kt
-
         NotificationHelper.createNotificationChannel(this)
         setContent {
             val appViewModel: AppViewModel = viewModel()
@@ -56,11 +59,17 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
             SmartAttendanceTheme(darkTheme = useDarkTheme) {
-                RequestNotificationPermission()
+                RequestPermissions() // Updated to a single function for both permissions
                 SmartAttendanceApp(appViewModel = appViewModel)
             }
         }
     }
+}
+
+@Composable
+fun RequestPermissions() {
+    RequestNotificationPermission()
+    RequestBatteryOptimizationPermission()
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -77,10 +86,50 @@ fun RequestNotificationPermission() {
 }
 
 @Composable
+fun RequestBatteryOptimizationPermission() {
+    val context = LocalContext.current
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    var showDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
+            showDialog = true
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Battery Optimization") },
+            text = { Text("To ensure that attendance reminders work correctly, please allow the app to run in the background without battery restrictions.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDialog = false
+                        val intent = Intent().apply {
+                            action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Text("Allow")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+
+@Composable
 fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     Scaffold(
-        // The Scaffold will automatically handle insets like the status bar and navigation bar.
         bottomBar = { BottomNavigationBar(navController = navController) }
     ) { innerPadding ->
         AppNavigation(
@@ -154,9 +203,10 @@ fun BottomNavigationBar(navController: NavHostController) {
                 selected = selected,
                 onClick = {
                     navController.navigate(item.route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
                         launchSingleTop = true
-                        restoreState = true
                     }
                 }
             )

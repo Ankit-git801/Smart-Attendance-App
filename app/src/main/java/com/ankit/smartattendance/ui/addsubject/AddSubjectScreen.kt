@@ -1,17 +1,23 @@
 package com.ankit.smartattendance.ui.addsubject
 
 import android.app.TimePickerDialog
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,8 +42,7 @@ fun AddSubjectScreen(
     appViewModel: AppViewModel
 ) {
     var subjectName by remember { mutableStateOf("") }
-    // Color is now a fixed default, not user-configurable
-    val subjectColor = "#81C784"
+    var subjectColor by remember { mutableStateOf(Color(0xFF81C784)) } // Default color
     var attendanceTarget by remember { mutableStateOf(75) }
     var schedules by remember { mutableStateOf<List<UiClassSchedule>>(emptyList()) }
     var showAddScheduleDialog by remember { mutableStateOf(false) }
@@ -48,7 +53,7 @@ fun AddSubjectScreen(
         if (isEditMode) {
             appViewModel.getSubjectById(subjectId)?.let { subject ->
                 subjectName = subject.name
-                // color is not loaded, it will use the default
+                subjectColor = Color(android.graphics.Color.parseColor(subject.color))
                 attendanceTarget = subject.targetAttendance
             }
             schedules = appViewModel.getSchedulesForSubject(subjectId).map { UiClassSchedule(it) }
@@ -67,10 +72,11 @@ fun AddSubjectScreen(
                 actions = {
                     Button(
                         onClick = {
+                            val hexColor = String.format("#%06X", (0xFFFFFF and subjectColor.toArgb()))
                             val newSubject = Subject(
                                 id = if (isEditMode) subjectId else 0,
                                 name = subjectName,
-                                color = subjectColor, // Use the default color
+                                color = hexColor,
                                 targetAttendance = attendanceTarget
                             )
                             appViewModel.addOrUpdateSubject(newSubject, schedules.map { it.schedule })
@@ -100,6 +106,7 @@ fun AddSubjectScreen(
                     leadingIcon = { Icon(Icons.Default.Edit, null) }
                 )
             }
+            item { ColorPicker(selectedColor = subjectColor, onColorSelected = { subjectColor = it }) }
             item { AttendanceTargetSlider(attendanceTarget, onTargetChange = { attendanceTarget = it }) }
             item {
                 Row(
@@ -140,6 +147,38 @@ fun AddSubjectScreen(
             onDismiss = { showAddScheduleDialog = false },
             onAddSchedule = { newSchedule -> schedules = schedules + UiClassSchedule(newSchedule) }
         )
+    }
+}
+
+@Composable
+private fun ColorPicker(selectedColor: Color, onColorSelected: (Color) -> Unit) {
+    val colors = listOf(
+        Color(0xFFF44336), Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF673AB7),
+        Color(0xFF3F51B5), Color(0xFF2196F3), Color(0xFF03A9F4), Color(0xFF00BCD4),
+        Color(0xFF009688), Color(0xFF4CAF50), Color(0xFF8BC34A), Color(0xFFCDDC39),
+        Color(0xFFFFEB3B), Color(0xFFFFC107), Color(0xFFFF9800), Color(0xFF795548)
+    )
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Subject Color", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(12.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(colors) { color ->
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                            .clickable { onColorSelected(color) }
+                            .border(
+                                width = if (color == selectedColor) 2.dp else 0.dp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+        }
     }
 }
 
