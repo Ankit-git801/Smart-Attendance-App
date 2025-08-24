@@ -4,10 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,12 +51,13 @@ fun CalendarScreen(appViewModel: AppViewModel) {
 @Composable
 private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick: (LocalDate) -> Unit) {
     val recordsForDay = remember(day, allRecords) {
-        allRecords.filter { LocalDate.ofEpochDay(it.date) == day.date }
+        allRecords.filter { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date }
     }
 
     val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
-    val wasPresent = recordsForDay.any { it.type == RecordType.CLASS && it.isPresent }
-    val wasAbsent = recordsForDay.any { it.type == RecordType.CLASS && !it.isPresent }
+    val classRecords = recordsForDay.filter { it.type == RecordType.CLASS }
+    val wasPresent = classRecords.any { it.isPresent }
+    val wasAbsent = classRecords.any { !it.isPresent }
 
     val dayBackgroundColor = when {
         isHoliday -> HolidayYellow.copy(alpha = 0.5f)

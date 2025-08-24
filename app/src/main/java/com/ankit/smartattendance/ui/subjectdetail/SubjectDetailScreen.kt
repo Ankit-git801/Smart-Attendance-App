@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewModel: AppViewModel) {
     val coroutineScope = rememberCoroutineScope()
     var subject by remember { mutableStateOf<Subject?>(null) }
-    var stats by remember { mutableStateOf(Pair(0.0, 0)) } // Default to 0.0 percentage and 0 total classes
+    var stats by remember { mutableStateOf(Pair(0.0, 0)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
 
@@ -49,11 +49,10 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             subject = appViewModel.getSubjectById(subjectId)
             val total = appViewModel.getTotalClassesForSubject(subjectId)
             val present = appViewModel.getPresentClassesForSubject(subjectId)
-            // THIS IS THE FIX: Check if total is greater than 0 before dividing
             val percentage = if (total > 0) {
                 (present.toDouble() / total) * 100
             } else {
-                0.0 // Default to 0.0 if no classes are recorded
+                0.0 // Default to 0.0 to prevent crash
             }
             stats = Pair(percentage, total)
         }
@@ -137,9 +136,7 @@ private fun ManualAddAttendanceDialog(
             Button(onClick = {
                 val present = presentCount.toIntOrNull() ?: 0
                 val absent = absentCount.toIntOrNull() ?: 0
-                if (present > 0 || absent > 0) { // Only confirm if there's input
-                    onConfirm(present, absent)
-                }
+                onConfirm(present, absent)
             }) {
                 Text("Save")
             }
@@ -184,7 +181,7 @@ private fun AttendanceCalendar(records: List<AttendanceRecord>) {
     val state = rememberCalendarState(startMonth, endMonth, currentMonth, firstDayOfWeek)
 
     HorizontalCalendar(state = state, dayContent = { day ->
-        val recordForDay = remember(day, records) { records.find { LocalDate.ofEpochDay(it.date) == day.date } }
+        val recordForDay = remember(day, records) { records.find { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date } }
         val dayBackgroundColor = when {
             recordForDay == null -> Color.Transparent
             recordForDay.isPresent -> SuccessGreen.copy(alpha = 0.4f)

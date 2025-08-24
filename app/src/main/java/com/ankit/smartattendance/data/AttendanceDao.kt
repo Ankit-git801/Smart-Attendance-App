@@ -48,9 +48,9 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
 
-    // NEW FUNCTION TO CHECK IF ATTENDANCE FOR A SCHEDULE IS MARKED ON A GIVEN DATE
-    @Query("SELECT EXISTS(SELECT 1 FROM attendance_records WHERE scheduleId = :scheduleId AND date = :date LIMIT 1)")
-    fun isAttendanceMarkedForSchedule(scheduleId: Long, date: Long): Flow<Boolean>
+    // New query to prevent duplicate CLASS records for a given day
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND scheduleId = :scheduleId AND date = :date AND type = 'CLASS'")
+    suspend fun countClassRecordsForDay(subjectId: Long, scheduleId: Long, date: Long): Int
 
     // --- Complex / Joined Queries for Statistics ---
     @Query("SELECT COUNT(*) FROM attendance_records")

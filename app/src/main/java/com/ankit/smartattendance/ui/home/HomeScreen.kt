@@ -1,6 +1,5 @@
 package com.ankit.smartattendance.ui.home
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -92,7 +90,13 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 items(todaysSchedule, key = { "schedule_${it.schedule.id}" }) { scheduleWithSubject ->
                     TodayScheduleCard(
                         scheduleWithSubject = scheduleWithSubject,
-                        appViewModel = appViewModel
+                        onMark = { isPresent ->
+                            appViewModel.markAttendance(
+                                scheduleWithSubject.subject.id,
+                                scheduleWithSubject.schedule.id,
+                                isPresent
+                            )
+                        }
                     )
                 }
             }
@@ -134,6 +138,7 @@ private fun ExtraClassDialog(
 ) {
     var selectedSubjectId by remember { mutableStateOf(subjects.firstOrNull()?.id) }
     var expanded by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mark Extra Class") },
@@ -176,7 +181,6 @@ private fun ExtraClassDialog(
                 Button(
                     onClick = {
                         selectedSubjectId?.let { onConfirm(it, true) }
-                        onDismiss() // THIS LINE IS THE FIX
                     },
                     enabled = selectedSubjectId != null
                 ) {
@@ -186,7 +190,6 @@ private fun ExtraClassDialog(
                 Button(
                     onClick = {
                         selectedSubjectId?.let { onConfirm(it, false) }
-                        onDismiss() // THIS LINE IS THE FIX
                     },
                     enabled = selectedSubjectId != null,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -204,67 +207,48 @@ private fun ExtraClassDialog(
 }
 
 @Composable
-fun TodayScheduleCard(
-    scheduleWithSubject: ScheduleWithSubject,
-    appViewModel: AppViewModel
-) {
+fun TodayScheduleCard(scheduleWithSubject: ScheduleWithSubject, onMark: (Boolean) -> Unit) {
     val subject = scheduleWithSubject.subject
     val schedule = scheduleWithSubject.schedule
     val startTime = formatTime(schedule.startHour, schedule.startMinute)
     val endTime = formatTime(schedule.endHour, schedule.endMinute)
 
-    val isMarked by appViewModel.isAttendanceMarkedForToday(schedule.id).collectAsState(initial = false)
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(Color(android.graphics.Color.parseColor(subject.color)))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
                 )
                 Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
                     Text(text = subject.name, fontWeight = FontWeight.Bold)
                     Text(text = "$startTime - $endTime")
                 }
             }
-            AnimatedVisibility(visible = !isMarked) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = { onMark(true) },
+                    enabled = !scheduleWithSubject.isCompleted
                 ) {
-                    OutlinedButton(
-                        onClick = { appViewModel.markAttendance(subject.id, schedule.id, false) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text("Absent")
-                    }
-                    Button(
-                        onClick = { appViewModel.markAttendance(subject.id, schedule.id, true) }
-                    ) {
-                        Text("Present")
-                    }
+                    Text("Present")
                 }
-            }
-            AnimatedVisibility(visible = isMarked) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.End
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = { onMark(false) },
+                    enabled = !scheduleWithSubject.isCompleted,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(
-                        "Marked",
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Text("Absent")
                 }
             }
         }
@@ -295,7 +279,7 @@ fun SubjectCard(subject: Subject, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(subject.color)))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
             )
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {

@@ -57,13 +57,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markAttendance(subjectId: Long, scheduleId: Long?, isPresent: Boolean) {
         viewModelScope.launch {
-            val record = AttendanceRecord(
-                subjectId = subjectId,
-                scheduleId = scheduleId,
-                date = LocalDate.now().toEpochDay(),
-                isPresent = isPresent,
-                note = "Marked from Home"
-            )
+            val today = LocalDate.now().toEpochDay()
+            if (scheduleId != null) {
+                // Prevent duplicate marking for scheduled classes
+                if (attendanceDao.countClassRecordsForDay(subjectId, scheduleId, today) > 0) {
+                    return@launch
+                }
+            }
+            val record = AttendanceRecord(subjectId = subjectId, scheduleId = scheduleId, date = today, isPresent = isPresent)
             attendanceDao.insertAttendanceRecord(record)
         }
     }
@@ -96,16 +97,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val manualRecords = mutableListOf<AttendanceRecord>()
             val note = "Manually Added"
             repeat(presentCount) {
-                manualRecords.add(AttendanceRecord(
-                    subjectId = subjectId, scheduleId = null, date = 0,
-                    isPresent = true, note = note, type = RecordType.MANUAL
-                ))
+                manualRecords.add(
+                    AttendanceRecord(
+                        subjectId = subjectId, scheduleId = null, date = 0,
+                        isPresent = true, note = note, type = RecordType.MANUAL
+                    )
+                )
             }
             repeat(absentCount) {
-                manualRecords.add(AttendanceRecord(
-                    subjectId = subjectId, scheduleId = null, date = 0,
-                    isPresent = false, note = note, type = RecordType.MANUAL
-                ))
+                manualRecords.add(
+                    AttendanceRecord(
+                        subjectId = subjectId, scheduleId = null, date = 0,
+                        isPresent = false, note = note, type = RecordType.MANUAL
+                    )
+                )
             }
             manualRecords.forEach { attendanceDao.insertAttendanceRecord(it) }
         }
@@ -116,12 +121,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             attendanceDao.deleteAllSubjects()
             attendanceDao.deleteAllAttendanceRecords()
         }
-    }
-
-    // NEW FUNCTION
-    fun isAttendanceMarkedForToday(scheduleId: Long): Flow<Boolean> {
-        val today = LocalDate.now().toEpochDay()
-        return attendanceDao.isAttendanceMarkedForSchedule(scheduleId, today)
     }
 
     suspend fun getSubjectById(subjectId: Long): Subject? = attendanceDao.getSubjectById(subjectId)
@@ -147,7 +146,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun getAttendancePercentage(subjectId: Long): Double {
         val total = attendanceDao.getTotalClassesForSubject(subjectId)
         val present = attendanceDao.getPresentClassesForSubject(subjectId)
-        return if (total > 0) (present.toDouble() / total) * 100 else 100.0
+        return if (total > 0) (present.toDouble() / total) * 100 else 0.0
     }
 
     suspend fun getTotalClassesForSubject(subjectId: Long): Int = attendanceDao.getTotalClassesForSubject(subjectId)

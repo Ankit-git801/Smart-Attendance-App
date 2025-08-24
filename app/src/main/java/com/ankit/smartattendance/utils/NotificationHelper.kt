@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.ankit.smartattendance.MainActivity
 import com.ankit.smartattendance.data.ClassSchedule
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.receivers.NotificationActionReceiver
@@ -20,8 +21,20 @@ object NotificationHelper {
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val reminderChannel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT)
-            val warningChannel = NotificationChannel(WARNING_CHANNEL_ID, WARNING_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH)
+            val reminderChannel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "High-priority reminders for upcoming classes."
+            }
+            val warningChannel = NotificationChannel(
+                WARNING_CHANNEL_ID,
+                WARNING_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts for low attendance."
+            }
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(reminderChannel)
             notificationManager.createNotificationChannel(warningChannel)
@@ -32,7 +45,11 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notificationId = schedule.id.toInt()
 
-        // Use distinct request codes for actions to avoid collision with the main alarm
+        val contentIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val contentPendingIntent = PendingIntent.getActivity(context, notificationId, contentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
         val presentRequestCode = notificationId + 20000
         val absentRequestCode = notificationId + 30000
 
@@ -41,6 +58,7 @@ object NotificationHelper {
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subject.id)
             putExtra(NotificationActionReceiver.EXTRA_IS_PRESENT, true)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra("EXTRA_SCHEDULE_ID", schedule.id)
         }
         val presentPendingIntent = PendingIntent.getBroadcast(context, presentRequestCode, presentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
@@ -49,6 +67,7 @@ object NotificationHelper {
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subject.id)
             putExtra(NotificationActionReceiver.EXTRA_IS_PRESENT, false)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra("EXTRA_SCHEDULE_ID", schedule.id)
         }
         val absentPendingIntent = PendingIntent.getBroadcast(context, absentRequestCode, absentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
@@ -56,7 +75,9 @@ object NotificationHelper {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(subject.name)
             .setContentText("Did you attend the class?")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM) // Use ALARM category
+            .setFullScreenIntent(contentPendingIntent, true)
             .addAction(0, "Present", presentPendingIntent)
             .addAction(0, "Absent", absentPendingIntent)
             .setAutoCancel(true)
@@ -70,7 +91,7 @@ object NotificationHelper {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("$subjectName Attendance Updated")
             .setContentText("Your new attendance is ${"%.1f".format(newPercentage)}%.")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
 
         notificationManager.notify(notificationId, builder.build())

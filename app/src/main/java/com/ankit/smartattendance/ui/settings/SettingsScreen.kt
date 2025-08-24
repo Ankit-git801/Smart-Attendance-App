@@ -1,8 +1,11 @@
 package com.ankit.smartattendance.ui.settings
 
+import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -81,8 +84,14 @@ fun SettingsScreen(appViewModel: AppViewModel) {
                 )
             }
             item {
-                Text("System", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp))
+                Text("System Permissions", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp))
                 BatteryOptimizationSetting(context = context)
+            }
+            item {
+                ExactAlarmSetting(context = context)
+            }
+            item {
+                FullScreenIntentSetting(context = context)
             }
         }
     }
@@ -106,6 +115,45 @@ fun BatteryOptimizationSetting(context: Context) {
         }
     )
 }
+
+@Composable
+fun ExactAlarmSetting(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val canSchedule = alarmManager.canScheduleExactAlarms()
+        SettingsItem(
+            title = "Exact Alarm Permission",
+            subtitle = if (canSchedule) "Allowed" else "Needed for reminders",
+            icon = { Icon(Icons.Default.Info, "Exact Alarms") },
+            onClick = {
+                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    context.startActivity(this)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun FullScreenIntentSetting(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val canUse = notificationManager.canUseFullScreenIntent()
+        SettingsItem(
+            title = "Full-Screen Notifications",
+            subtitle = if (canUse) "Allowed" else "Needed for on-screen prompts",
+            icon = { Icon(Icons.Default.Info, "Full-Screen Notifications") },
+            onClick = {
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                    data = Uri.fromParts("package", context.packageName, null)
+                    context.startActivity(this)
+                }
+            }
+        )
+    }
+}
+
 
 @Composable
 fun SettingsItem(title: String, subtitle: String, icon: @Composable () -> Unit, onClick: () -> Unit) {

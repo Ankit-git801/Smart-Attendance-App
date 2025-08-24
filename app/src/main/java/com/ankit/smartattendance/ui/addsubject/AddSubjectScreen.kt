@@ -1,21 +1,17 @@
 package com.ankit.smartattendance.ui.addsubject
 
 import android.app.TimePickerDialog
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,7 +23,6 @@ import com.ankit.smartattendance.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Wrapper class to provide a stable, unique ID for the UI
 data class UiClassSchedule(
     val schedule: ClassSchedule,
     val localId: UUID = UUID.randomUUID()
@@ -41,9 +36,9 @@ fun AddSubjectScreen(
     appViewModel: AppViewModel
 ) {
     var subjectName by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf("#81C784") }
+    // Color is now a fixed default, not user-configurable
+    val subjectColor = "#81C784"
     var attendanceTarget by remember { mutableStateOf(75) }
-    // State now holds a list of our wrapper class
     var schedules by remember { mutableStateOf<List<UiClassSchedule>>(emptyList()) }
     var showAddScheduleDialog by remember { mutableStateOf(false) }
 
@@ -53,10 +48,9 @@ fun AddSubjectScreen(
         if (isEditMode) {
             appViewModel.getSubjectById(subjectId)?.let { subject ->
                 subjectName = subject.name
-                selectedColor = subject.color
+                // color is not loaded, it will use the default
                 attendanceTarget = subject.targetAttendance
             }
-            // Wrap the schedules from the database in our UI model
             schedules = appViewModel.getSchedulesForSubject(subjectId).map { UiClassSchedule(it) }
         }
     }
@@ -76,10 +70,9 @@ fun AddSubjectScreen(
                             val newSubject = Subject(
                                 id = if (isEditMode) subjectId else 0,
                                 name = subjectName,
-                                color = selectedColor,
+                                color = subjectColor, // Use the default color
                                 targetAttendance = attendanceTarget
                             )
-                            // Unwrap the schedules before sending to the ViewModel
                             appViewModel.addOrUpdateSubject(newSubject, schedules.map { it.schedule })
                             navController.popBackStack()
                         },
@@ -107,7 +100,6 @@ fun AddSubjectScreen(
                     leadingIcon = { Icon(Icons.Default.Edit, null) }
                 )
             }
-            item { ColorSelector(selectedColor, onColorSelected = { selectedColor = it }) }
             item { AttendanceTargetSlider(attendanceTarget, onTargetChange = { attendanceTarget = it }) }
             item {
                 Row(
@@ -134,7 +126,6 @@ fun AddSubjectScreen(
                     }
                 }
             } else {
-                // Here is the key fix: providing a stable, unique key for each item
                 items(schedules, key = { it.localId }) { uiSchedule ->
                     ScheduleCard(uiSchedule.schedule) {
                         schedules = schedules.filter { it.localId != uiSchedule.localId }
@@ -153,42 +144,7 @@ fun AddSubjectScreen(
 }
 
 @Composable
-private fun ColorSelector(selectedColor: String, onColorSelected: (String) -> Unit) {
-    // This component remains the same
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Subject Color", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(12.dp))
-            val colors = listOf(
-                "#E57373" to "Red", "#81C784" to "Green", "#64B5F6" to "Blue", "#FFD54F" to "Yellow",
-                "#BA68C8" to "Purple", "#FF8A65" to "Orange", "#4DB6AC" to "Teal", "#7986CB" to "Indigo"
-            )
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(colors) { (colorHex, colorName) ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .shadow(if (colorHex == selectedColor) 4.dp else 0.dp, CircleShape)
-                                .background(Color(android.graphics.Color.parseColor(colorHex)), CircleShape)
-                                .clickable { onColorSelected(colorHex) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (colorHex == selectedColor) {
-                                Icon(Icons.Default.Check, contentDescription = "Selected", tint = Color.White)
-                            }
-                        }
-                        Text(colorName, style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun AttendanceTargetSlider(target: Int, onTargetChange: (Int) -> Unit) {
-    // This component remains the same
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
@@ -207,7 +163,6 @@ private fun AttendanceTargetSlider(target: Int, onTargetChange: (Int) -> Unit) {
 
 @Composable
 private fun ScheduleCard(schedule: ClassSchedule, onDelete: () -> Unit) {
-    // The signature for onDelete is simplified
     Card(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -221,10 +176,8 @@ private fun ScheduleCard(schedule: ClassSchedule, onDelete: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedule) -> Unit) {
-    // This component logic remains mostly the same
     var selectedDay by remember { mutableStateOf(Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) }
 
     val calendar = Calendar.getInstance()
@@ -263,7 +216,6 @@ private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedu
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DaySelector(selectedDay: Int, onDaySelected: (Int) -> Unit) {
-    // This component remains the same
     val days = listOf(
         "Mon" to Calendar.MONDAY, "Tue" to Calendar.TUESDAY, "Wed" to Calendar.WEDNESDAY,
         "Thu" to Calendar.THURSDAY, "Fri" to Calendar.FRIDAY, "Sat" to Calendar.SATURDAY, "Sun" to Calendar.SUNDAY
@@ -285,7 +237,6 @@ private fun DaySelector(selectedDay: Int, onDaySelected: (Int) -> Unit) {
 
 @Composable
 private fun TimeSelector(label: String, hour: Int, minute: Int, onClick: () -> Unit) {
-    // This component remains the same
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -299,13 +250,11 @@ private fun TimeSelector(label: String, hour: Int, minute: Int, onClick: () -> U
 }
 
 private fun getDayName(dayOfWeek: Int): String {
-    // This function remains the same
     val calendar = Calendar.getInstance().apply { set(Calendar.DAY_OF_WEEK, dayOfWeek) }
     return SimpleDateFormat("EEEE", Locale.getDefault()).format(calendar.time)
 }
 
 private fun formatTime(hour: Int, minute: Int): String {
-    // This function remains the same
     val calendar = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, hour)
         set(Calendar.MINUTE, minute)
