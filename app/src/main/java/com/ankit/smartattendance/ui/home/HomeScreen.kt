@@ -1,6 +1,5 @@
 package com.ankit.smartattendance.ui.home
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -24,7 +24,6 @@ import com.ankit.smartattendance.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val subjects by appViewModel.allSubjects.collectAsState(initial = emptyList())
@@ -45,48 +44,51 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
 
     Scaffold(
         floatingActionButton = {
-            // CORRECTED: Replaced `spacing` with `verticalArrangement`
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            Column(horizontalAlignment = Alignment.End) {
                 FloatingActionButton(
-                    onClick = { appViewModel.showExtraClassDialog() },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Extra Class")
-                }
-                ExtendedFloatingActionButton(
                     onClick = { navController.navigate("add_subject") },
-                    icon = { Icon(Icons.Default.Add, contentDescription = "Add Subject") },
-                    text = { Text("New Subject") }
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Subject")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                ExtendedFloatingActionButton(
+                    onClick = { appViewModel.showExtraClassDialog() },
+                    icon = { Icon(Icons.Default.Add, contentDescription = "Add Extra Class") },
+                    text = { Text("Extra Class") }
                 )
             }
         }
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(paddingValues),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Text(
                     text = today,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-                SectionHeader(title = "Today's Schedule")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "TODAY'S CLASSES",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
             if (todaysSchedule.isEmpty()) {
                 item {
-                    EmptyState(
-                        message = "No classes scheduled for today. Enjoy your day!",
-                        modifier = Modifier.padding(vertical = 32.dp)
+                    Text(
+                        "No classes scheduled for today.",
+                        modifier = Modifier.padding(vertical = 16.dp),
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
+                // ** THE FIX IS APPLIED HERE **
                 items(todaysSchedule, key = { "schedule_${it.schedule.id}" }) { scheduleWithSubject ->
                     TodayScheduleCard(
                         scheduleWithSubject = scheduleWithSubject,
@@ -102,18 +104,24 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             }
 
             item {
-                Spacer(modifier = Modifier.height(24.dp))
-                SectionHeader(title = "All Subjects")
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "ALL SUBJECTS",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
             if (subjects.isEmpty()) {
                 item {
-                    EmptyState(
-                        message = "No subjects yet. Tap 'New Subject' to add one.",
-                        modifier = Modifier.padding(vertical = 32.dp)
+                    Text(
+                        "No subjects yet. Tap the '+' button to add your first subject.",
+                        modifier = Modifier.padding(vertical = 16.dp),
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
+                // ** THE FIX IS APPLIED HERE **
                 items(subjects, key = { "subject_${it.id}" }) { subject ->
                     SubjectCard(subject = subject, appViewModel = appViewModel) {
                         navController.navigate("subject_detail/${subject.id}")
@@ -122,27 +130,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
-}
-
-@Composable
-private fun EmptyState(message: String, modifier: Modifier = Modifier) {
-    Text(
-        text = message,
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)
-    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -159,62 +146,65 @@ private fun ExtraClassDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mark Extra Class") },
         text = {
-            if (subjects.isNotEmpty()) {
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
-                ) {
-                    OutlinedTextField(
-                        value = subjects.find { it.id == selectedSubjectId }?.name ?: "Select Subject",
-                        onValueChange = {},
-                        readOnly = true,
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(
+            Column {
+                if (subjects.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.fillMaxWidth()
+                        onExpandedChange = { expanded = !expanded }
                     ) {
-                        subjects.forEach { subject ->
-                            DropdownMenuItem(
-                                text = { Text(subject.name) },
-                                onClick = {
-                                    selectedSubjectId = subject.id
-                                    expanded = false
-                                }
-                            )
+                        TextField(
+                            value = subjects.find { it.id == selectedSubjectId }?.name ?: "Select Subject",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier.menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            subjects.forEach { subject ->
+                                DropdownMenuItem(
+                                    text = { Text(subject.name) },
+                                    onClick = {
+                                        selectedSubjectId = subject.id
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
+                } else {
+                    Text("Please add a subject first.")
                 }
-            } else {
-                Text("Please add a subject first to mark extra attendance.")
             }
         },
         confirmButton = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(
-                    onClick = {
-                        selectedSubjectId?.let { onConfirm(it, false) }
-                        onDismiss()
-                    },
-                    enabled = selectedSubjectId != null
-                ) { Text("Absent") }
-                Spacer(modifier = Modifier.width(8.dp))
+            Row {
                 Button(
                     onClick = {
                         selectedSubjectId?.let { onConfirm(it, true) }
-                        onDismiss()
                     },
                     enabled = selectedSubjectId != null
-                ) { Text("Present") }
+                ) {
+                    Text("Present")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        selectedSubjectId?.let { onConfirm(it, false) }
+                    },
+                    enabled = selectedSubjectId != null,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Absent")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
         }
     )
 }
@@ -226,61 +216,37 @@ fun TodayScheduleCard(scheduleWithSubject: ScheduleWithSubject, onMark: (Boolean
     val startTime = formatTime(schedule.startHour, schedule.startMinute)
     val endTime = formatTime(schedule.endHour, schedule.endMinute)
 
-    val isCompleted by remember(scheduleWithSubject) { derivedStateOf { scheduleWithSubject.isCompleted } }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Using a consistent color scheme
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = subject.name.first().toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                )
                 Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = subject.name, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "$startTime - $endTime",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Column {
+                    Text(text = subject.name, fontWeight = FontWeight.Bold)
+                    Text(text = "$startTime - $endTime")
                 }
             }
-            // Buttons are now only shown if the class is not completed
-            AnimatedVisibility(visible = !isCompleted) {
-                Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            if (!scheduleWithSubject.isCompleted) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Button(
-                        onClick = { onMark(true) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
+                    Button(onClick = { onMark(true) }) {
                         Text("Present")
                     }
-                    OutlinedButton(
-                        onClick = { onMark(false) }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { onMark(false) },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) {
                         Text("Absent")
                     }
@@ -310,35 +276,28 @@ fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Uni
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(subject.color)).copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = subject.name.first().toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color(android.graphics.Color.parseColor(subject.color))
-                )
-            }
+                    .background(Color(android.graphics.Color.parseColor(subject.color)).copy(alpha = 0.3f))
+            )
+            Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = subject.name,
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Target: ${subject.targetAttendance}%",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -347,6 +306,7 @@ fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Uni
                 Text(
                     text = "${"%.1f".format(it)}%",
                     style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     color = percentageColor
                 )
             }

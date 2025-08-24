@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.ankit.smartattendance.data.*
 import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.ScheduleWithSubject
+import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.utils.AlarmScheduler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -21,6 +22,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val allAttendanceRecords: Flow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceRecords()
     val theme: StateFlow<String> = preferencesManager.themeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "System Default")
     val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
+
+    // NEW: A flow that combines subjects with their attendance percentage
+    val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = allSubjects
+        .flatMapLatest { subjects ->
+            val flows = subjects.map { subject ->
+                flow {
+                    val percentage = getAttendancePercentage(subject.id)
+                    emit(SubjectWithAttendance(subject, percentage))
+                }
+            }
+            combine(flows) { it.toList() }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+
     private val _showExtraClassDialog = MutableStateFlow(false)
     val showExtraClassDialog: StateFlow<Boolean> = _showExtraClassDialog.asStateFlow()
     val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> = getTodaysSchedule().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -93,10 +108,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val isAlreadyHoliday = allAttendanceRecords.first().any { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
 
             if (isAlreadyHoliday) {
-                // If it's already a holiday, remove it without confirmation.
                 attendanceDao.deleteHolidayOnDate(dateAsLong)
             } else {
-                // Otherwise, always show the confirmation dialog before marking a new holiday.
                 _showHolidayDialog.value = date
             }
         }
@@ -106,13 +119,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _showHolidayDialog.value?.let { date ->
                 val dateAsLong = date.toEpochDay()
-                // First, delete any existing attendance records for any subject on that day.
                 attendanceDao.deleteAttendanceRecordsOnDate(dateAsLong)
-                // Then, add the new holiday record.
                 val holidayRecord = AttendanceRecord(subjectId = null, scheduleId = null, date = dateAsLong, isPresent = false, note = "Holiday", type = RecordType.HOLIDAY)
                 attendanceDao.insertAttendanceRecord(holidayRecord)
             }
-            // Hide the dialog
             _showHolidayDialog.value = null
         }
     }
@@ -156,7 +166,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteAllData() {
         viewModelScope.launch {
-            // Cancel all alarms before deleting data
             val subjects = allSubjects.first()
             subjects.forEach { subject ->
                 val schedules = attendanceDao.getSchedulesForSubject(subject.id)
