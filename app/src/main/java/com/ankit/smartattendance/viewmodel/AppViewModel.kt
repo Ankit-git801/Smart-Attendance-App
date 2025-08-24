@@ -24,9 +24,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
     private val _showExtraClassDialog = MutableStateFlow(false)
     val showExtraClassDialog: StateFlow<Boolean> = _showExtraClassDialog.asStateFlow()
-    private val _currentTime = MutableStateFlow(LocalTime.now())
-    val currentTime: StateFlow<LocalTime> = _currentTime.asStateFlow()
     val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> = getTodaysSchedule().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // State for the holiday confirmation dialog
+    private val _showHolidayDialog = MutableStateFlow<LocalDate?>(null)
+    val showHolidayDialog: StateFlow<LocalDate?> = _showHolidayDialog.asStateFlow()
 
     fun setTheme(theme: String) {
         viewModelScope.launch { preferencesManager.saveTheme(theme) }
@@ -59,7 +61,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val today = LocalDate.now().toEpochDay()
             if (scheduleId != null) {
-                // Prevent duplicate marking for scheduled classes
                 if (attendanceDao.countClassRecordsForDay(subjectId, scheduleId, today) > 0) {
                     return@launch
                 }
@@ -69,18 +70,55 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleHoliday(date: LocalDate) {
+    fun markAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean?) {
         viewModelScope.launch {
             val dateAsLong = date.toEpochDay()
-            val existingHoliday = attendanceDao.getAllAttendanceRecords().first()
-                .find { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
-            if (existingHoliday != null) {
+            attendanceDao.deleteRecordForDate(subjectId, dateAsLong)
+
+            if (isPresent != null) {
+                val newRecord = AttendanceRecord(
+                    subjectId = subjectId,
+                    scheduleId = null,
+                    date = dateAsLong,
+                    isPresent = isPresent,
+                    type = RecordType.CLASS
+                )
+                attendanceDao.insertAttendanceRecord(newRecord)
+            }
+        }
+    }
+
+    fun onHolidayToggleRequested(date: LocalDate) {
+        viewModelScope.launch {
+            val dateAsLong = date.toEpochDay()
+            val hasNonHolidayRecords = attendanceDao.countNonHolidayRecordsOnDate(dateAsLong) > 0
+            val isAlreadyHoliday = allAttendanceRecords.first().any { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
+
+            if (isAlreadyHoliday) {
                 attendanceDao.deleteHolidayOnDate(dateAsLong)
+            } else if (hasNonHolidayRecords) {
+                _showHolidayDialog.value = date
             } else {
                 val holidayRecord = AttendanceRecord(subjectId = null, scheduleId = null, date = dateAsLong, isPresent = false, note = "Holiday", type = RecordType.HOLIDAY)
                 attendanceDao.insertAttendanceRecord(holidayRecord)
             }
         }
+    }
+
+    fun onHolidayToggleConfirmed() {
+        viewModelScope.launch {
+            _showHolidayDialog.value?.let { date ->
+                val dateAsLong = date.toEpochDay()
+                attendanceDao.deleteAttendanceRecordsOnDate(dateAsLong)
+                val holidayRecord = AttendanceRecord(subjectId = null, scheduleId = null, date = dateAsLong, isPresent = false, note = "Holiday", type = RecordType.HOLIDAY)
+                attendanceDao.insertAttendanceRecord(holidayRecord)
+            }
+            _showHolidayDialog.value = null
+        }
+    }
+
+    fun onHolidayToggleDismissed() {
+        _showHolidayDialog.value = null
     }
 
     fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {

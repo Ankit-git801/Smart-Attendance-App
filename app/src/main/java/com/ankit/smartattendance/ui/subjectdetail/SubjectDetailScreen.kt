@@ -1,6 +1,7 @@
 package com.ankit.smartattendance.ui.subjectdetail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -18,9 +19,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.AttendanceRecord
+import com.ankit.smartattendance.data.RecordType
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.SuccessGreen
@@ -29,8 +32,12 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +48,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     var stats by remember { mutableStateOf(Pair(0.0, 0)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
 
     val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId).collectAsState(initial = emptyList())
 
@@ -52,7 +60,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             val percentage = if (total > 0) {
                 (present.toDouble() / total) * 100
             } else {
-                0.0 // Default to 0.0 to prevent crash
+                0.0
             }
             stats = Pair(percentage, total)
         }
@@ -83,6 +91,17 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
         )
     }
 
+    selectedDate?.let { date ->
+        MarkAttendanceDialog(
+            date = date,
+            onDismiss = { selectedDate = null },
+            onConfirm = { isPresent ->
+                appViewModel.markAttendanceForDate(subjectId, date, isPresent)
+                selectedDate = null
+            }
+        )
+    }
+
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(subject?.name ?: "Details") },
@@ -97,9 +116,50 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
         LazyColumn(Modifier.fillMaxSize().padding(paddingValues).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { subject?.let { AttendanceProgressCard(it.name, stats.first, it.targetAttendance) } }
             item { Text("Attendance Calendar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            item { AttendanceCalendar(records = attendanceRecords) }
+            item {
+                AttendanceCalendar(
+                    records = attendanceRecords,
+                    onDayClick = { date ->
+                        if (!date.isAfter(LocalDate.now())) {
+                            selectedDate = date
+                        }
+                    }
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun MarkAttendanceDialog(
+    date: LocalDate,
+    onDismiss: () -> Unit,
+    onConfirm: (Boolean?) -> Unit
+) {
+    val formatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mark Attendance") },
+        text = { Text("Set attendance status for ${date.format(formatter)}:") },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { onConfirm(null) }) { Text("Clear") }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = { onConfirm(true) }) { Text("Present") }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = { onConfirm(false) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Absent") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -172,30 +232,60 @@ private fun AttendanceProgressCard(subjectName: String, percentage: Double, targ
     }
 }
 
+// -- CHANGE HERE: Add a new composable for the weekday titles --
 @Composable
-private fun AttendanceCalendar(records: List<AttendanceRecord>) {
+private fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        for (dayOfWeek in daysOfWeek) {
+            Text(
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                text = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttendanceCalendar(
+    records: List<AttendanceRecord>,
+    onDayClick: (LocalDate) -> Unit
+) {
     val currentMonth = remember { YearMonth.now() }
     val startMonth = remember { currentMonth.minusMonths(100) }
     val endMonth = remember { currentMonth.plusMonths(100) }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
     val state = rememberCalendarState(startMonth, endMonth, currentMonth, firstDayOfWeek)
 
-    HorizontalCalendar(state = state, dayContent = { day ->
-        val recordForDay = remember(day, records) { records.find { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date } }
-        val dayBackgroundColor = when {
-            recordForDay == null -> Color.Transparent
-            recordForDay.isPresent -> SuccessGreen.copy(alpha = 0.4f)
-            else -> ErrorRed.copy(alpha = 0.4f)
+    // -- CHANGE HERE: Wrap the calendar in a Column and add the title row --
+    Column {
+        val daysOfWeek = remember {
+            val days = DayOfWeek.values()
+            days.slice(days.indexOf(firstDayOfWeek)..days.lastIndex) + days.slice(0 until days.indexOf(firstDayOfWeek))
         }
-        Box(
-            Modifier
-                .aspectRatio(1f)
-                .padding(2.dp)
-                .clip(CircleShape)
-                .background(color = dayBackgroundColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = day.date.dayOfMonth.toString())
-        }
-    })
+        DaysOfWeekTitle(daysOfWeek = daysOfWeek)
+        Spacer(modifier = Modifier.height(8.dp)) // Add some space between titles and dates
+        HorizontalCalendar(state = state, dayContent = { day ->
+            val recordForDay = remember(day, records) {
+                records.find { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date && it.type == RecordType.CLASS }
+            }
+            val dayBackgroundColor = when {
+                recordForDay == null -> Color.Transparent
+                recordForDay.isPresent -> SuccessGreen.copy(alpha = 0.4f)
+                else -> ErrorRed.copy(alpha = 0.4f)
+            }
+            Box(
+                Modifier
+                    .aspectRatio(1f)
+                    .padding(2.dp)
+                    .clip(CircleShape)
+                    .background(color = dayBackgroundColor)
+                    .clickable { onDayClick(day.date) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = day.date.dayOfMonth.toString())
+            }
+        })
+    }
 }

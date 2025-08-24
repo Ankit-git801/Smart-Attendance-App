@@ -48,7 +48,14 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
 
-    // New query to prevent duplicate CLASS records for a given day
+    // --- New/Updated Queries for Calendar and SubjectDetail ---
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type = 'CLASS'")
+    suspend fun deleteRecordForDate(subjectId: Long, date: Long)
+    @Query("DELETE FROM attendance_records WHERE date = :date")
+    suspend fun deleteAttendanceRecordsOnDate(date: Long)
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE date = :date AND type != 'HOLIDAY'")
+    suspend fun countNonHolidayRecordsOnDate(date: Long): Int
+
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND scheduleId = :scheduleId AND date = :date AND type = 'CLASS'")
     suspend fun countClassRecordsForDay(subjectId: Long, scheduleId: Long, date: Long): Int
 

@@ -71,7 +71,6 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     Scaffold(
         bottomBar = { BottomNavigationBar(navController = navController) }
-        // The FloatingActionButton has been removed from here
     ) { innerPadding ->
         AppNavigation(
             navController = navController,
@@ -150,7 +149,7 @@ fun BottomNavigationBar(navController: NavHostController) {
 
 sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
     object Home : BottomNavItem("home", "Home", Icons.Default.Home)
-    object Calendar : BottomNavItem("calendar", "Calendar", Icons.Default.Today)
+    object Calendar : BottomNavItem("calendar", "Holidays", Icons.Default.Celebration) // Changed title and icon
     object Statistics : BottomNavItem("statistics", "Stats", Icons.Default.Analytics)
     object Settings : BottomNavItem("settings", "Settings", Icons.Default.Settings)
 }

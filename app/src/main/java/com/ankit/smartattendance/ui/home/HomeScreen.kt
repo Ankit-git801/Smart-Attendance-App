@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -120,7 +121,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 }
             } else {
                 items(subjects, key = { "subject_${it.id}" }) { subject ->
-                    SubjectCard(subject = subject) {
+                    SubjectCard(subject = subject, appViewModel = appViewModel) {
                         navController.navigate("subject_detail/${subject.id}")
                     }
                 }
@@ -232,23 +233,22 @@ fun TodayScheduleCard(scheduleWithSubject: ScheduleWithSubject, onMark: (Boolean
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                Button(
-                    onClick = { onMark(true) },
-                    enabled = !scheduleWithSubject.isCompleted
+            // -- CHANGE HERE: Buttons are now only shown if the class is not completed --
+            if (!scheduleWithSubject.isCompleted) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Text("Present")
-                }
-                Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = { onMark(false) },
-                    enabled = !scheduleWithSubject.isCompleted,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Absent")
+                    Button(onClick = { onMark(true) }) {
+                        Text("Present")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { onMark(false) },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Absent")
+                    }
                 }
             }
         }
@@ -264,7 +264,14 @@ private fun formatTime(hour: Int, minute: Int): String {
 }
 
 @Composable
-fun SubjectCard(subject: Subject, onClick: () -> Unit) {
+fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Unit) {
+    var percentage by remember { mutableStateOf<Double?>(null) }
+
+    // Fetch the attendance percentage when the card is composed or the subject ID changes
+    LaunchedEffect(subject.id) {
+        percentage = appViewModel.getAttendancePercentage(subject.id)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -279,19 +286,29 @@ fun SubjectCard(subject: Subject, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .background(Color(android.graphics.Color.parseColor(subject.color)).copy(alpha = 0.3f))
             )
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = subject.name,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Target: ${subject.targetAttendance}%",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // -- CHANGE HERE: Display the current percentage once loaded --
+            percentage?.let {
+                val percentageColor = if (it >= subject.targetAttendance) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                Text(
+                    text = "${"%.1f".format(it)}%",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = percentageColor
                 )
             }
         }
