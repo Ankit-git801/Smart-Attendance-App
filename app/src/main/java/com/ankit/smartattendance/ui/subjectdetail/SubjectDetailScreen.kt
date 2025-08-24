@@ -113,9 +113,12 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             }
         )
     }) { paddingValues ->
-        LazyColumn(Modifier.fillMaxSize().padding(paddingValues).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { subject?.let { AttendanceProgressCard(it.name, stats.first, it.targetAttendance) } }
-            item { Text("Attendance Calendar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        LazyColumn(Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item {
+                Spacer(Modifier.height(8.dp))
+                subject?.let { AttendanceProgressCard(it.name, stats.first, it.targetAttendance) }
+            }
+            item { Text("Attendance History", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
             item {
                 AttendanceCalendar(
                     records = attendanceRecords,
@@ -196,7 +199,9 @@ private fun ManualAddAttendanceDialog(
             Button(onClick = {
                 val present = presentCount.toIntOrNull() ?: 0
                 val absent = absentCount.toIntOrNull() ?: 0
-                onConfirm(present, absent)
+                if (present > 0 || absent > 0) {
+                    onConfirm(present, absent)
+                }
             }) {
                 Text("Save")
             }
@@ -232,7 +237,21 @@ private fun AttendanceProgressCard(subjectName: String, percentage: Double, targ
     }
 }
 
-// -- CHANGE HERE: Add a new composable for the weekday titles --
+@Composable
+private fun MonthTitle(month: YearMonth) {
+    val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val year = month.year
+    Text(
+        text = "$monthName $year",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        textAlign = TextAlign.Center
+    )
+}
+
 @Composable
 private fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -258,14 +277,16 @@ private fun AttendanceCalendar(
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
     val state = rememberCalendarState(startMonth, endMonth, currentMonth, firstDayOfWeek)
 
-    // -- CHANGE HERE: Wrap the calendar in a Column and add the title row --
     Column {
+        val visibleMonth = state.firstVisibleMonth.yearMonth
+        MonthTitle(month = visibleMonth)
+
         val daysOfWeek = remember {
             val days = DayOfWeek.values()
             days.slice(days.indexOf(firstDayOfWeek)..days.lastIndex) + days.slice(0 until days.indexOf(firstDayOfWeek))
         }
         DaysOfWeekTitle(daysOfWeek = daysOfWeek)
-        Spacer(modifier = Modifier.height(8.dp)) // Add some space between titles and dates
+        Spacer(modifier = Modifier.height(8.dp))
         HorizontalCalendar(state = state, dayContent = { day ->
             val recordForDay = remember(day, records) {
                 records.find { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date && it.type == RecordType.CLASS }
@@ -284,7 +305,14 @@ private fun AttendanceCalendar(
                     .clickable { onDayClick(day.date) },
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = day.date.dayOfMonth.toString())
+                val textColor = when {
+                    day.date > LocalDate.now() -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    else -> LocalContentColor.current
+                }
+                Text(
+                    text = day.date.dayOfMonth.toString(),
+                    color = textColor
+                )
             }
         })
     }

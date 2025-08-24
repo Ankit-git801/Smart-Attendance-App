@@ -50,6 +50,10 @@ fun CalendarScreen(appViewModel: AppViewModel) {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Holiday Calendar") }) }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
+            // Display the current month and year
+            val visibleMonth = state.firstVisibleMonth.yearMonth
+            MonthTitle(month = visibleMonth)
+
             val daysOfWeek = remember {
                 val days = DayOfWeek.values()
                 val first = firstDayOfWeekFromLocale()
@@ -58,6 +62,7 @@ fun CalendarScreen(appViewModel: AppViewModel) {
             DaysOfWeekTitle(daysOfWeek = daysOfWeek)
             HorizontalCalendar(
                 state = state,
+                contentPadding = PaddingValues(horizontal = 8.dp),
                 dayContent = { day ->
                     Day(day, allRecords) { date ->
                         appViewModel.onHolidayToggleRequested(date)
@@ -69,8 +74,23 @@ fun CalendarScreen(appViewModel: AppViewModel) {
 }
 
 @Composable
+private fun MonthTitle(month: YearMonth) {
+    val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val year = month.year
+    Text(
+        text = "$monthName $year",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        textAlign = TextAlign.Center
+    )
+}
+
+@Composable
 private fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
         for (dayOfWeek in daysOfWeek) {
             Text(
                 modifier = Modifier.weight(1f),
@@ -94,7 +114,7 @@ private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick
 
     val dayBackgroundColor = when {
         isHoliday -> HolidayYellow.copy(alpha = 0.5f)
-        wasPresent && wasAbsent -> Color.Gray.copy(alpha = 0.4f) // Mixed attendance
+        wasPresent && wasAbsent -> Color.Gray.copy(alpha = 0.4f)
         wasPresent -> SuccessGreen.copy(alpha = 0.4f)
         wasAbsent -> ErrorRed.copy(alpha = 0.4f)
         else -> Color.Transparent
@@ -106,15 +126,16 @@ private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick
             .padding(4.dp)
             .clip(CircleShape)
             .background(color = dayBackgroundColor)
-            .clickable(
-                enabled = day.date <= LocalDate.now(),
-                onClick = { onDayClick(day.date) }
-            ),
+            .clickable(onClick = { onDayClick(day.date) }),
         contentAlignment = Alignment.Center
     ) {
+        val textColor = when {
+            day.date > LocalDate.now() && !isHoliday -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            else -> LocalContentColor.current
+        }
         Text(
             text = day.date.dayOfMonth.toString(),
-            color = if (day.date > LocalDate.now()) Color.Gray.copy(alpha = 0.6f) else LocalContentColor.current
+            color = textColor
         )
     }
 }
@@ -127,7 +148,7 @@ fun HolidayConfirmationDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Confirm Holiday") },
-        text = { Text("This day has existing attendance records. Marking it as a holiday will remove them. Are you sure?") },
+        text = { Text("Marking this day as a holiday will remove any existing attendance records. Are you sure?") },
         confirmButton = {
             Button(
                 onClick = onConfirm,

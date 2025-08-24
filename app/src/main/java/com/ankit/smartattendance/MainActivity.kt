@@ -8,7 +8,14 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -36,6 +43,9 @@ import com.google.accompanist.permissions.rememberPermissionState
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // This enables the edge-to-edge display from our Theme.kt
+        // WindowCompat.setDecorFitsSystemWindows(window, false) // This is now handled in Theme.kt
+
         NotificationHelper.createNotificationChannel(this)
         setContent {
             val appViewModel: AppViewModel = viewModel()
@@ -70,6 +80,7 @@ fun RequestNotificationPermission() {
 fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     Scaffold(
+        // The Scaffold will automatically handle insets like the status bar and navigation bar.
         bottomBar = { BottomNavigationBar(navController = navController) }
     ) { innerPadding ->
         AppNavigation(
@@ -131,10 +142,16 @@ fun BottomNavigationBar(navController: NavHostController) {
 
     NavigationBar {
         items.forEach { item ->
+            val selected = currentRoute == item.route
             NavigationBarItem(
-                icon = { Icon(item.icon, contentDescription = item.title) },
+                icon = {
+                    Icon(
+                        imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                        contentDescription = item.title
+                    )
+                },
                 label = { Text(item.title) },
-                selected = currentRoute == item.route,
+                selected = selected,
                 onClick = {
                     navController.navigate(item.route) {
                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -147,9 +164,14 @@ fun BottomNavigationBar(navController: NavHostController) {
     }
 }
 
-sealed class BottomNavItem(val route: String, val title: String, val icon: ImageVector) {
-    object Home : BottomNavItem("home", "Home", Icons.Default.Home)
-    object Calendar : BottomNavItem("calendar", "Holidays", Icons.Default.Celebration) // Changed title and icon
-    object Statistics : BottomNavItem("statistics", "Stats", Icons.Default.Analytics)
-    object Settings : BottomNavItem("settings", "Settings", Icons.Default.Settings)
+sealed class BottomNavItem(
+    val route: String,
+    val title: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector
+) {
+    object Home : BottomNavItem("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
+    object Calendar : BottomNavItem("calendar", "Calendar", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
+    object Statistics : BottomNavItem("statistics", "Stats", Icons.Filled.BarChart, Icons.Outlined.BarChart)
+    object Settings : BottomNavItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }

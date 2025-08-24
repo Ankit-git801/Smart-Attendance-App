@@ -10,7 +10,6 @@ import com.ankit.smartattendance.utils.AlarmScheduler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalTime
 import java.util.Calendar
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -91,16 +90,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun onHolidayToggleRequested(date: LocalDate) {
         viewModelScope.launch {
             val dateAsLong = date.toEpochDay()
-            val hasNonHolidayRecords = attendanceDao.countNonHolidayRecordsOnDate(dateAsLong) > 0
             val isAlreadyHoliday = allAttendanceRecords.first().any { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
 
             if (isAlreadyHoliday) {
+                // If it's already a holiday, remove it without confirmation.
                 attendanceDao.deleteHolidayOnDate(dateAsLong)
-            } else if (hasNonHolidayRecords) {
-                _showHolidayDialog.value = date
             } else {
-                val holidayRecord = AttendanceRecord(subjectId = null, scheduleId = null, date = dateAsLong, isPresent = false, note = "Holiday", type = RecordType.HOLIDAY)
-                attendanceDao.insertAttendanceRecord(holidayRecord)
+                // Otherwise, always show the confirmation dialog before marking a new holiday.
+                _showHolidayDialog.value = date
             }
         }
     }
@@ -109,10 +106,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _showHolidayDialog.value?.let { date ->
                 val dateAsLong = date.toEpochDay()
+                // First, delete any existing attendance records for any subject on that day.
                 attendanceDao.deleteAttendanceRecordsOnDate(dateAsLong)
+                // Then, add the new holiday record.
                 val holidayRecord = AttendanceRecord(subjectId = null, scheduleId = null, date = dateAsLong, isPresent = false, note = "Holiday", type = RecordType.HOLIDAY)
                 attendanceDao.insertAttendanceRecord(holidayRecord)
             }
+            // Hide the dialog
             _showHolidayDialog.value = null
         }
     }
@@ -156,6 +156,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteAllData() {
         viewModelScope.launch {
+            // Cancel all alarms before deleting data
+            val subjects = allSubjects.first()
+            subjects.forEach { subject ->
+                val schedules = attendanceDao.getSchedulesForSubject(subject.id)
+                AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
+            }
             attendanceDao.deleteAllSubjects()
             attendanceDao.deleteAllAttendanceRecords()
         }
@@ -189,5 +195,4 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getTotalClassesForSubject(subjectId: Long): Int = attendanceDao.getTotalClassesForSubject(subjectId)
     suspend fun getPresentClassesForSubject(subjectId: Long): Int = attendanceDao.getPresentClassesForSubject(subjectId)
-    suspend fun getAbsentClassesForSubject(subjectId: Long): Int = attendanceDao.getTotalClassesForSubject(subjectId) - attendanceDao.getPresentClassesForSubject(subjectId)
 }
