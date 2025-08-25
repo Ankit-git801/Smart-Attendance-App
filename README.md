@@ -25,7 +25,7 @@ A modern, offline-first attendance tracking application for Android, built with 
 -   **Visual Progress:** A donut chart and progress bars provide a quick visual indication of your attendance status.
 -   **Calendar View:** An in-app calendar visually displays your attendance history with color-coded dates for present, absent, or mixed attendance days.
 -   **Offline First:** All data is stored locally on the device using a Room database, making the app fully functional without an internet connection.
--   **Class Reminders:** *(Experimental)* The app includes a notification system to remind users about upcoming classes.
+-   **Class Reminders:** The app includes a notification system to remind users about upcoming classes.
 
 ---
 
@@ -72,4 +72,3 @@ To get a local copy up and running, follow these simple steps.
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-```

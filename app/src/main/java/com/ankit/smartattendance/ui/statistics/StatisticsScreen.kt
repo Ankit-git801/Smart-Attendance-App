@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.ui.theme.ErrorRed
@@ -31,12 +33,12 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatisticsScreen(appViewModel: AppViewModel) {
+fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
     var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
-    val subjects by appViewModel.allSubjects.collectAsState(initial = emptyList())
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(subjects) {
+    LaunchedEffect(subjectsWithAttendance) {
         coroutineScope.launch {
             stats = appViewModel.getOverallStatistics()
         }
@@ -47,7 +49,7 @@ fun StatisticsScreen(appViewModel: AppViewModel) {
             TopAppBar(title = { Text("Your Attendance Statistics") })
         }
     ) { paddingValues ->
-        if (subjects.isEmpty()) {
+        if (subjectsWithAttendance.isEmpty()) {
             EmptyState(Modifier.padding(paddingValues))
         } else {
             LazyColumn(
@@ -60,7 +62,10 @@ fun StatisticsScreen(appViewModel: AppViewModel) {
                 item {
                     stats?.let {
                         OverallPerformanceCard(it)
-                    } ?: Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    } ?: Box(
+                        Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator() }
                 }
 
                 item {
@@ -72,9 +77,12 @@ fun StatisticsScreen(appViewModel: AppViewModel) {
                     )
                 }
 
-                // ** THE FIX IS APPLIED HERE **
-                items(subjects, key = { it.id }) { subject ->
-                    SubjectStatCard(subject, appViewModel)
+                items(subjectsWithAttendance, key = { it.subject.id }) { subjectWithAttendance ->
+                    SubjectStatCard(
+                        navController = navController,
+                        subject = subjectWithAttendance.subject,
+                        percentage = subjectWithAttendance.percentage
+                    )
                 }
             }
         }
@@ -90,7 +98,12 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(Icons.Default.BarChart, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(
+            Icons.Default.BarChart,
+            null,
+            Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(16.dp))
         Text(
             "No Statistics Yet",
@@ -110,7 +123,11 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 private fun OverallPerformanceCard(stats: AttendanceStatistics) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp)) {
-            Text("Overall Performance", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                "Overall Performance",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(Modifier.height(24.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 DonutChart(percentage = stats.overallPercentage.toFloat())
@@ -118,7 +135,12 @@ private fun OverallPerformanceCard(stats: AttendanceStatistics) {
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 StatItem(Icons.Default.Functions, "Total", stats.totalClasses.toString())
-                StatItem(Icons.Default.CheckCircle, "Present", stats.totalPresent.toString(), SuccessGreen)
+                StatItem(
+                    Icons.Default.CheckCircle,
+                    "Present",
+                    stats.totalPresent.toString(),
+                    SuccessGreen
+                )
                 StatItem(Icons.Default.Cancel, "Absent", stats.totalAbsent.toString(), ErrorRed)
             }
         }
@@ -166,20 +188,39 @@ private fun DonutChart(
 }
 
 @Composable
-private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+private fun StatItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    color: Color = MaterialTheme.colorScheme.onSurface
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = color)
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
-private fun SubjectStatCard(subject: Subject, appViewModel: AppViewModel) {
-    var percentage by remember { mutableStateOf<Double?>(null) }
-    LaunchedEffect(subject.id) { percentage = appViewModel.getAttendancePercentage(subject.id) }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun SubjectStatCard(
+    navController: NavController,
+    subject: Subject,
+    percentage: Double
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { navController.navigate("subject_detail/${subject.id}") }
+    ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
@@ -189,17 +230,18 @@ private fun SubjectStatCard(subject: Subject, appViewModel: AppViewModel) {
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(subject.name, fontWeight = FontWeight.SemiBold)
-                Text("Target: ${subject.targetAttendance}%", style = MaterialTheme.typography.bodySmall)
-            }
-            percentage?.let {
-                val color = if (it >= subject.targetAttendance) SuccessGreen else ErrorRed
                 Text(
-                    "${"%.1f".format(it)}%",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = color
+                    "Target: ${subject.targetAttendance}%",
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
+            val color = if (percentage >= subject.targetAttendance) SuccessGreen else ErrorRed
+            Text(
+                "${"%.1f".format(percentage)}%",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
         }
     }
 }

@@ -76,7 +76,8 @@ fun RequestPermissions() {
 @Composable
 fun RequestNotificationPermission() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionState = rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS)
+        val permissionState =
+            rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS)
         LaunchedEffect(Unit) {
             if (!permissionState.status.isGranted) {
                 permissionState.launchPermissionRequest()
@@ -125,7 +126,6 @@ fun RequestBatteryOptimizationPermission() {
     }
 }
 
-
 @Composable
 fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
@@ -158,7 +158,7 @@ fun AppNavigation(
             CalendarScreen(appViewModel = appViewModel)
         }
         composable(BottomNavItem.Statistics.route) {
-            StatisticsScreen(appViewModel = appViewModel)
+            StatisticsScreen(navController = navController, appViewModel = appViewModel)
         }
         composable(BottomNavItem.Settings.route) {
             SettingsScreen(appViewModel = appViewModel)
@@ -168,7 +168,11 @@ fun AppNavigation(
         }
         composable("edit_subject/{subjectId}") { backStackEntry ->
             val subjectId = backStackEntry.arguments?.getString("subjectId")?.toLongOrNull() ?: 0L
-            AddSubjectScreen(navController = navController, subjectId = subjectId, appViewModel = appViewModel)
+            AddSubjectScreen(
+                navController = navController,
+                subjectId = subjectId,
+                appViewModel = appViewModel
+            )
         }
         composable("subject_detail/{subjectId}") { backStackEntry ->
             val subjectId = backStackEntry.arguments?.getString("subjectId")
@@ -221,7 +225,12 @@ sealed class BottomNavItem(
     val unselectedIcon: ImageVector
 ) {
     object Home : BottomNavItem("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
-    object Calendar : BottomNavItem("calendar", "Calendar", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
-    object Statistics : BottomNavItem("statistics", "Stats", Icons.Filled.BarChart, Icons.Outlined.BarChart)
-    object Settings : BottomNavItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    object Calendar :
+        BottomNavItem("calendar", "Calendar", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday)
+
+    object Statistics :
+        BottomNavItem("statistics", "Stats", Icons.Filled.BarChart, Icons.Outlined.BarChart)
+
+    object Settings :
+        BottomNavItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }

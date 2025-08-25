@@ -47,6 +47,8 @@ interface AttendanceDao {
     suspend fun deleteHolidayOnDate(date: Long)
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
+    suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
 
     // --- New/Updated Queries for Calendar and SubjectDetail ---
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type = 'CLASS'")

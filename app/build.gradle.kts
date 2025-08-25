@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    // Replaced kapt with ksp for better performance
     id("com.google.devtools.ksp")
 }
 
@@ -32,9 +31,7 @@ android {
         }
     }
     compileOptions {
-        // Core library desugaring is still needed
         isCoreLibraryDesugaringEnabled = true
-
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -45,7 +42,6 @@ android {
         compose = true
     }
     composeOptions {
-        // Updated to a version compatible with Kotlin 1.9.22
         kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
@@ -56,10 +52,8 @@ android {
 }
 
 dependencies {
-
     // Core library desugaring dependency
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
-    // Add this inside the dependencies { ... } block
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 
     implementation("androidx.core:core-ktx:1.13.1")
@@ -72,7 +66,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Room Database (using ksp instead of kapt)
+    // Room Database
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
@@ -85,6 +79,9 @@ dependencies {
 
     // Calendar Library
     implementation("com.kizitonwose.calendar:compose:2.5.1")
+
+    // Confetti Library
+    implementation("nl.dionsegijn:konfetti-compose:2.0.4")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

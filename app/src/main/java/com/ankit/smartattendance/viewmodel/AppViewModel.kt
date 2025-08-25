@@ -20,10 +20,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val applicationContext = application.applicationContext
 
     val allAttendanceRecords: Flow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceRecords()
-    val theme: StateFlow<String> = preferencesManager.themeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "System Default")
+    val theme: StateFlow<String> = preferencesManager.themeFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        "System Default"
+    )
     val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
 
-    // NEW: A flow that combines subjects with their attendance percentage
+    val userName: StateFlow<String> = preferencesManager.userNameFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        "User"
+    )
+
+    private val _confettiTrigger = MutableStateFlow(0)
+    val confettiTrigger: StateFlow<Int> = _confettiTrigger.asStateFlow()
+
     val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = allSubjects
         .flatMapLatest { subjects ->
             val flows = subjects.map { subject ->
@@ -35,21 +47,40 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             combine(flows) { it.toList() }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-
     private val _showExtraClassDialog = MutableStateFlow(false)
     val showExtraClassDialog: StateFlow<Boolean> = _showExtraClassDialog.asStateFlow()
-    val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> = getTodaysSchedule().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // State for the holiday confirmation dialog
+    val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> =
+        getTodaysSchedule().stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
     private val _showHolidayDialog = MutableStateFlow<LocalDate?>(null)
     val showHolidayDialog: StateFlow<LocalDate?> = _showHolidayDialog.asStateFlow()
+
+    private fun triggerConfetti() {
+        _confettiTrigger.value++
+    }
 
     fun setTheme(theme: String) {
         viewModelScope.launch { preferencesManager.saveTheme(theme) }
     }
 
-    fun showExtraClassDialog() { _showExtraClassDialog.value = true }
-    fun hideExtraClassDialog() { _showExtraClassDialog.value = false }
+    fun setUserName(name: String) {
+        viewModelScope.launch {
+            preferencesManager.saveUserName(name)
+        }
+    }
+
+    fun showExtraClassDialog() {
+        _showExtraClassDialog.value = true
+    }
+
+    fun hideExtraClassDialog() {
+        _showExtraClassDialog.value = false
+    }
 
     fun addOrUpdateSubject(subject: Subject, schedules: List<ClassSchedule>) {
         viewModelScope.launch {
@@ -59,7 +90,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             attendanceDao.deleteSchedulesForSubject(subjectId)
             schedules.forEach { attendanceDao.insertSchedule(it.copy(subjectId = subjectId)) }
             val newSchedules = attendanceDao.getSchedulesForSubject(subjectId)
-            AlarmScheduler.scheduleClassAlarms(applicationContext, subject.copy(id = subjectId), newSchedules)
+            AlarmScheduler.scheduleClassAlarms(
+                applicationContext,
+                subject.copy(id = subjectId),
+                newSchedules
+            )
         }
     }
 
@@ -73,19 +108,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markAttendance(subjectId: Long, scheduleId: Long?, isPresent: Boolean) {
         viewModelScope.launch {
+            val subject = getSubjectById(subjectId) ?: return@launch
+            val target = subject.targetAttendance
+            val oldPercentage = getAttendancePercentage(subjectId)
+
             val today = LocalDate.now().toEpochDay()
             if (scheduleId != null) {
                 if (attendanceDao.countClassRecordsForDay(subjectId, scheduleId, today) > 0) {
                     return@launch
                 }
             }
-            val record = AttendanceRecord(subjectId = subjectId, scheduleId = scheduleId, date = today, isPresent = isPresent)
+            val record = AttendanceRecord(
+                subjectId = subjectId,
+                scheduleId = scheduleId,
+                date = today,
+                isPresent = isPresent
+            )
             attendanceDao.insertAttendanceRecord(record)
+
+            val newPercentage = getAttendancePercentage(subjectId)
+            if (oldPercentage < target && newPercentage >= target) {
+                triggerConfetti()
+            }
         }
     }
 
     fun markAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean?) {
         viewModelScope.launch {
+            val subject = getSubjectById(subjectId) ?: return@launch
+            val target = subject.targetAttendance
+            val oldPercentage = getAttendancePercentage(subjectId)
+
             val dateAsLong = date.toEpochDay()
             attendanceDao.deleteRecordForDate(subjectId, dateAsLong)
 
@@ -99,13 +152,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 attendanceDao.insertAttendanceRecord(newRecord)
             }
+
+            val newPercentage = getAttendancePercentage(subjectId)
+            if (oldPercentage < target && newPercentage >= target) {
+                triggerConfetti()
+            }
         }
     }
 
     fun onHolidayToggleRequested(date: LocalDate) {
         viewModelScope.launch {
             val dateAsLong = date.toEpochDay()
-            val isAlreadyHoliday = allAttendanceRecords.first().any { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
+            val isAlreadyHoliday = allAttendanceRecords.first()
+                .any { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
 
             if (isAlreadyHoliday) {
                 attendanceDao.deleteHolidayOnDate(dateAsLong)
@@ -120,7 +179,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _showHolidayDialog.value?.let { date ->
                 val dateAsLong = date.toEpochDay()
                 attendanceDao.deleteAttendanceRecordsOnDate(dateAsLong)
-                val holidayRecord = AttendanceRecord(subjectId = null, scheduleId = null, date = dateAsLong, isPresent = false, note = "Holiday", type = RecordType.HOLIDAY)
+                val holidayRecord = AttendanceRecord(
+                    subjectId = null,
+                    scheduleId = null,
+                    date = dateAsLong,
+                    isPresent = false,
+                    note = "Holiday",
+                    type = RecordType.HOLIDAY
+                )
                 attendanceDao.insertAttendanceRecord(holidayRecord)
             }
             _showHolidayDialog.value = null
@@ -133,14 +199,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
         viewModelScope.launch {
-            val record = AttendanceRecord(subjectId = subjectId, scheduleId = null, date = LocalDate.now().toEpochDay(), isPresent = isPresent, note = note ?: "Extra Class")
+            val subject = getSubjectById(subjectId) ?: return@launch
+            val target = subject.targetAttendance
+            val oldPercentage = getAttendancePercentage(subjectId)
+
+            val record = AttendanceRecord(
+                subjectId = subjectId,
+                scheduleId = null,
+                date = LocalDate.now().toEpochDay(),
+                isPresent = isPresent,
+                note = note ?: "Extra Class"
+            )
             attendanceDao.insertAttendanceRecord(record)
             hideExtraClassDialog()
+
+            val newPercentage = getAttendancePercentage(subjectId)
+            if (oldPercentage < target && newPercentage >= target) {
+                triggerConfetti()
+            }
         }
     }
 
     fun addManualAttendance(subjectId: Long, presentCount: Int, absentCount: Int) {
         viewModelScope.launch {
+            val subject = getSubjectById(subjectId) ?: return@launch
+            val target = subject.targetAttendance
+            val oldPercentage = getAttendancePercentage(subjectId)
+
             attendanceDao.deleteManualRecordsForSubject(subjectId)
             val manualRecords = mutableListOf<AttendanceRecord>()
             val note = "Manually Added"
@@ -161,6 +246,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             manualRecords.forEach { attendanceDao.insertAttendanceRecord(it) }
+
+            val newPercentage = getAttendancePercentage(subjectId)
+            if (oldPercentage < target && newPercentage >= target) {
+                triggerConfetti()
+            }
         }
     }
 
@@ -177,14 +267,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun getSubjectById(subjectId: Long): Subject? = attendanceDao.getSubjectById(subjectId)
-    suspend fun getSchedulesForSubject(subjectId: Long): List<ClassSchedule> = attendanceDao.getSchedulesForSubject(subjectId)
-    fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>> = attendanceDao.getAttendanceRecordsForSubject(subjectId)
+    suspend fun getSchedulesForSubject(subjectId: Long): List<ClassSchedule> =
+        attendanceDao.getSchedulesForSubject(subjectId)
+
+    fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>> =
+        attendanceDao.getAttendanceRecordsForSubject(subjectId)
 
     private fun getTodaysSchedule(): Flow<List<ScheduleWithSubject>> {
         val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
         return attendanceDao.getSchedulesForDay(today).combine(allSubjects) { schedules, subjects ->
             schedules.mapNotNull { schedule ->
-                subjects.find { it.id == schedule.subjectId }?.let { ScheduleWithSubject(schedule, it) }
+                subjects.find { it.id == schedule.subjectId }
+                    ?.let { ScheduleWithSubject(schedule, it) }
             }.sortedBy { it.schedule.startHour }
         }
     }
@@ -193,7 +287,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val total = attendanceDao.getTotalClassesOverall()
         val present = attendanceDao.getTotalPresentOverall()
         val subjects = attendanceDao.getSubjectCount()
-        return AttendanceStatistics(total, present, total - present, if (total > 0) (present.toDouble() / total) * 100 else 0.0, subjects)
+        return AttendanceStatistics(
+            total,
+            present,
+            total - present,
+            if (total > 0) (present.toDouble() / total) * 100 else 0.0,
+            subjects
+        )
     }
 
     suspend fun getAttendancePercentage(subjectId: Long): Double {
@@ -202,6 +302,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return if (total > 0) (present.toDouble() / total) * 100 else 0.0
     }
 
-    suspend fun getTotalClassesForSubject(subjectId: Long): Int = attendanceDao.getTotalClassesForSubject(subjectId)
-    suspend fun getPresentClassesForSubject(subjectId: Long): Int = attendanceDao.getPresentClassesForSubject(subjectId)
+    suspend fun getTotalClassesForSubject(subjectId: Long): Int =
+        attendanceDao.getTotalClassesForSubject(subjectId)
+
+    suspend fun getPresentClassesForSubject(subjectId: Long): Int =
+        attendanceDao.getPresentClassesForSubject(subjectId)
 }

@@ -37,6 +37,7 @@ object AlarmScheduler {
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
 
+                // If the alarm time is in the past for this week, schedule it for next week
                 if (this.timeInMillis <= System.currentTimeMillis()) {
                     add(Calendar.WEEK_OF_YEAR, 1)
                 }

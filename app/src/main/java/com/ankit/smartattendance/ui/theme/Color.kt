@@ -19,7 +19,7 @@ val LightError = Color(0xFFBA1A1A)
 val LightOnError = Color(0xFFFFFFFF)
 val LightErrorContainer = Color(0xFFFFDAD6)
 val LightOnErrorContainer = Color(0xFF410002)
-val LightBackground = Color(0xFFFEFBFF)
+val LightBackground = Color(0xFFF8F8FF) // Slightly off-white
 val LightOnBackground = Color(0xFF1B1B1F)
 val LightSurface = Color(0xFFFEFBFF)
 val LightOnSurface = Color(0xFF1B1B1F)
@@ -44,7 +44,7 @@ val DarkError = Color(0xFFFFB4AB)
 val DarkOnError = Color(0xFF690005)
 val DarkErrorContainer = Color(0xFF93000A)
 val DarkOnErrorContainer = Color(0xFFFFDAD6)
-val DarkBackground = Color(0xFF1B1B1F)
+val DarkBackground = Color(0xFF121212) // Standard dark background
 val DarkOnBackground = Color(0xFFE4E1E6)
 val DarkSurface = Color(0xFF1B1B1F)
 val DarkOnSurface = Color(0xFFE4E1E6)
@@ -53,6 +53,6 @@ val DarkOnSurfaceVariant = Color(0xFFC7C5D0)
 val DarkOutline = Color(0xFF91909A)
 
 // Custom App-Specific Colors
-val SuccessGreen = Color(0xFF4CAF50)
-val ErrorRed = Color(0xFFF44336)
-val HolidayYellow = Color(0xFFFFC107)
+val SuccessGreen = Color(0xFF2E7D32) // A deeper green
+val ErrorRed = Color(0xFFD32F2F)   // A standard error red
+val HolidayYellow = Color(0xFFFFA000)
