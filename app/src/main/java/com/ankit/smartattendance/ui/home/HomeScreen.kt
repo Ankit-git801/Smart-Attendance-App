@@ -1,6 +1,8 @@
 package com.ankit.smartattendance.ui.home
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -17,8 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -40,7 +45,7 @@ private fun getGreeting(): String {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val subjects by appViewModel.allSubjects.collectAsState(initial = emptyList())
@@ -59,56 +64,58 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
         )
     }
 
-    Scaffold { paddingValues ->
-        LazyColumn(
-            modifier = Modifier.padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text(
+                text = "${getGreeting()}, $userName",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            QuickActions(
+                onExtraClassClick = { appViewModel.showExtraClassDialog() },
+                onNewSubjectClick = { navController.navigate("add_subject") }
+            )
+        }
+
+        item {
+            Text(
+                text = "TODAY'S CLASSES",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        if (todaysSchedule.isEmpty()) {
             item {
-                // Greeting and Date
-                Text(
-                    text = "${getGreeting()}, $userName",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Quick Action Buttons
-                QuickActions(
-                    onExtraClassClick = { appViewModel.showExtraClassDialog() },
-                    onNewSubjectClick = { navController.navigate("add_subject") }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "TODAY'S CLASSES",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (todaysSchedule.isEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "No classes scheduled for today.",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "No classes scheduled for today. Relax!",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
-            } else {
-                items(todaysSchedule, key = { "schedule_${it.schedule.id}" }) { scheduleWithSubject ->
+            }
+        } else {
+            items(todaysSchedule, key = { "schedule_${it.schedule.id}" }) { scheduleWithSubject ->
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(500)) + slideInVertically(initialOffsetY = { it / 2 }),
+                    exit = fadeOut(animationSpec = tween(500))
+                ) {
                     TodayScheduleCard(
                         scheduleWithSubject = scheduleWithSubject,
                         appViewModel = appViewModel,
@@ -122,32 +129,38 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                     )
                 }
             }
+        }
 
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "ALL SUBJECTS",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        if (subjects.isEmpty()) {
             item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "ALL SUBJECTS",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (subjects.isEmpty()) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "No subjects yet. Tap 'New Subject' above to add one.",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "No subjects yet. Tap 'New Subject' above to add one.",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
                 }
-            } else {
-                items(subjects, key = { "subject_${it.id}" }) { subject ->
+            }
+        } else {
+            items(subjects, key = { "subject_${it.id}" }) { subject ->
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(500, 200)) + slideInVertically(initialOffsetY = { it / 2 }),
+                    exit = fadeOut(animationSpec = tween(500))
+                ) {
                     SubjectCard(subject = subject, appViewModel = appViewModel) {
                         navController.navigate("subject_detail/${subject.id}")
                     }
@@ -156,7 +169,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
         }
     }
 }
-
+// ... (The rest of your HomeScreen.kt code remains the same)
 @Composable
 private fun QuickActions(onExtraClassClick: () -> Unit, onNewSubjectClick: () -> Unit) {
     Card(
@@ -168,7 +181,6 @@ private fun QuickActions(onExtraClassClick: () -> Unit, onNewSubjectClick: () ->
                 .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Extra Class Button (Tonal)
             Button(
                 onClick = onExtraClassClick,
                 modifier = Modifier.weight(1f),
@@ -182,7 +194,6 @@ private fun QuickActions(onExtraClassClick: () -> Unit, onNewSubjectClick: () ->
                 Spacer(Modifier.width(8.dp))
                 Text("Extra Class", fontWeight = FontWeight.Bold)
             }
-            // New Subject Button (Filled)
             Button(
                 onClick = onNewSubjectClick,
                 modifier = Modifier.weight(1f),
@@ -281,14 +292,12 @@ fun TodayScheduleCard(
     onMark: (Boolean) -> Unit
 ) {
     val records by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
-
     val isAlreadyMarked = remember(records, scheduleWithSubject.schedule.id) {
         val todayEpochDay = LocalDate.now().toEpochDay()
         records.any { record ->
             record.scheduleId == scheduleWithSubject.schedule.id && record.date == todayEpochDay
         }
     }
-
     val subject = scheduleWithSubject.subject
     val schedule = scheduleWithSubject.schedule
     val startTime = formatTime(schedule.startHour, schedule.startMinute)
@@ -296,69 +305,71 @@ fun TodayScheduleCard(
     val subjectColor = Color(android.graphics.Color.parseColor(subject.color))
     val isLive = scheduleWithSubject.isCurrentClass
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            // Vertical color bar
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(subjectColor)
+            )
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(subjectColor)
-                )
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = subject.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "$startTime - $endTime",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                if (isLive) {
-                    LiveBadge()
-                }
-            }
-
-            if (!scheduleWithSubject.isCompleted && !isAlreadyMarked) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        "Mark as:",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(16.dp))
-                    Button(onClick = { onMark(true) }) {
-                        Text("Present")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = subject.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "$startTime - $endTime",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { onMark(false) },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Absent")
+                    if (isLive) {
+                        LiveBadge()
                     }
                 }
-            } else if (isAlreadyMarked) {
-                Text(
-                    text = "Attendance Marked",
-                    modifier = Modifier.align(Alignment.End),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                AnimatedVisibility(visible = !scheduleWithSubject.isCompleted && !isAlreadyMarked) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Mark as:",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Button(onClick = { onMark(true) }) { Text("Present") }
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(onClick = { onMark(false) }) { Text("Absent") }
+                    }
+                }
+                AnimatedVisibility(visible = isAlreadyMarked) {
+                    Text(
+                        text = "Attendance Marked",
+                        modifier = Modifier.align(Alignment.End),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
@@ -369,20 +380,24 @@ private fun LiveBadge() {
     val infiniteTransition = rememberInfiniteTransition(label = "live_badge_transition")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.3f,
+        targetValue = 1.1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 800),
             repeatMode = RepeatMode.Reverse
         ), label = "live_badge_scale"
     )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(ErrorRed.copy(alpha = 0.1f))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(9.dp)
+                .size(8.dp)
                 .scale(scale)
                 .clip(CircleShape)
                 .background(ErrorRed)
@@ -391,7 +406,7 @@ private fun LiveBadge() {
             text = "LIVE",
             color = ErrorRed,
             fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelMedium
         )
     }
 }
@@ -407,8 +422,8 @@ private fun formatTime(hour: Int, minute: Int): String {
 @Composable
 fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Unit) {
     var percentage by remember { mutableStateOf<Double?>(null) }
+    val subjectColor = Color(android.graphics.Color.parseColor(subject.color))
 
-    // Re-calculates percentage whenever the subject or its records change
     LaunchedEffect(subject.id, appViewModel.allAttendanceRecords) {
         percentage = appViewModel.getAttendancePercentage(subject.id)
     }
@@ -423,14 +438,7 @@ fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Uni
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(subject.color)))
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = subject.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -443,15 +451,48 @@ fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Uni
                 )
             }
             percentage?.let {
-                val percentageColor =
-                    if (it >= subject.targetAttendance) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                Text(
-                    text = "${"%.1f".format(it)}%",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = percentageColor
+                val animatedPercentage by animateFloatAsState(
+                    targetValue = it.toFloat(),
+                    animationSpec = tween(1000),
+                    label = ""
+                )
+                AnimatedCircularProgress(
+                    percentage = animatedPercentage,
+                    color = subjectColor
                 )
             }
         }
+    }
+}
+
+@Composable
+fun AnimatedCircularProgress(
+    percentage: Float,
+    color: Color,
+    radius: Dp = 32.dp,
+    strokeWidth: Dp = 4.dp
+) {
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawArc(
+                color = color.copy(alpha = 0.3f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = color,
+                startAngle = -90f,
+                sweepAngle = (percentage / 100) * 360f,
+                useCenter = false,
+                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+            )
+        }
+        Text(
+            text = "${percentage.toInt()}%",
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Bold
+        )
     }
 }

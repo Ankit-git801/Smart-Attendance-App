@@ -50,7 +50,6 @@ fun CalendarScreen(appViewModel: AppViewModel) {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Holiday Calendar") }) }) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues)) {
-            // Display the current month and year
             val visibleMonth = state.firstVisibleMonth.yearMonth
             MonthTitle(month = visibleMonth)
 
@@ -72,7 +71,7 @@ fun CalendarScreen(appViewModel: AppViewModel) {
         }
     }
 }
-
+// ... (The rest of your CalendarScreen.kt code remains the same)
 @Composable
 private fun MonthTitle(month: YearMonth) {
     val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())

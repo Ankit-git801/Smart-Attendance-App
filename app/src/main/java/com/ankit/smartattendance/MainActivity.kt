@@ -10,8 +10,12 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
@@ -59,7 +63,7 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
             SmartAttendanceTheme(darkTheme = useDarkTheme) {
-                RequestPermissions() // Updated to a single function for both permissions
+                RequestPermissions()
                 SmartAttendanceApp(appViewModel = appViewModel)
             }
         }
@@ -130,12 +134,13 @@ fun RequestBatteryOptimizationPermission() {
 fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     Scaffold(
+        modifier = Modifier.systemBarsPadding(), // Apply system bar padding to the Scaffold
         bottomBar = { BottomNavigationBar(navController = navController) }
-    ) { innerPadding ->
+    ) { innerPadding -> // This padding is now aware of the system bars
         AppNavigation(
             navController = navController,
             appViewModel = appViewModel,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding) // Apply padding here
         )
     }
 }
@@ -149,7 +154,11 @@ fun AppNavigation(
     NavHost(
         navController = navController,
         startDestination = BottomNavItem.Home.route,
-        modifier = modifier
+        modifier = modifier, // Use the modifier passed from Scaffold
+        enterTransition = { fadeIn(animationSpec = tween(350)) },
+        exitTransition = { fadeOut(animationSpec = tween(350)) },
+        popEnterTransition = { fadeIn(animationSpec = tween(350)) },
+        popExitTransition = { fadeOut(animationSpec = tween(350)) }
     ) {
         composable(BottomNavItem.Home.route) {
             HomeScreen(navController = navController, appViewModel = appViewModel)
@@ -208,9 +217,10 @@ fun BottomNavigationBar(navController: NavHostController) {
                 onClick = {
                     navController.navigate(item.route) {
                         popUpTo(navController.graph.findStartDestination().id) {
-                            inclusive = true
+                            saveState = true
                         }
                         launchSingleTop = true
+                        restoreState = true
                     }
                 }
             )

@@ -54,7 +54,7 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier
-                    .padding(paddingValues)
+                    .padding(paddingValues) // Use padding from Scaffold
                     .fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -88,7 +88,7 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
         }
     }
 }
-
+// ... (The rest of your StatisticsScreen.kt code remains the same)
 @Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
     Column(
@@ -155,7 +155,8 @@ private fun DonutChart(
 ) {
     val animatedPercentage by animateFloatAsState(
         targetValue = percentage,
-        animationSpec = tween(durationMillis = 1000)
+        animationSpec = tween(durationMillis = 1000),
+        label = ""
     )
 
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {

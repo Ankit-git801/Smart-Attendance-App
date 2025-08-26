@@ -79,7 +79,7 @@ fun SettingsScreen(appViewModel: AppViewModel) {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.padding(paddingValues),
+            modifier = Modifier.padding(paddingValues), // Use padding from Scaffold
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -148,11 +148,10 @@ fun SettingsScreen(appViewModel: AppViewModel) {
         }
     }
 }
-
+// ... (The rest of your SettingsScreen.kt code remains the same)
 @Composable
 fun UserNameDialog(currentName: String, onDismiss: () -> Unit, onNameChange: (String) -> Unit) {
     var name by remember { mutableStateOf(currentName) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Change Your Name") },
