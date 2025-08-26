@@ -2,7 +2,6 @@ package com.ankit.smartattendance.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
-import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
@@ -12,19 +11,17 @@ import androidx.room.PrimaryKey
             entity = Subject::class,
             parentColumns = ["id"],
             childColumns = ["subjectId"],
-            onDelete = ForeignKey.CASCADE // If a subject is deleted, its schedules are also deleted
+            onDelete = ForeignKey.CASCADE
         )
-    ],
-    indices = [Index(value = ["subjectId"])]
+    ]
 )
 data class ClassSchedule(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val subjectId: Long,
-    val dayOfWeek: Int, // e.g., Calendar.MONDAY
+    var subjectId: Long,
+    val dayOfWeek: Int, // 1 for Sunday, 2 for Monday, etc.
     val startHour: Int,
     val startMinute: Int,
-    val endHour: Int,
-    val endMinute: Int,
-    val location: String = "" // Optional class location
+    val endHour: Int,     // <-- ADDED THIS LINE
+    val endMinute: Int    // <-- ADDED THIS LINE
 )

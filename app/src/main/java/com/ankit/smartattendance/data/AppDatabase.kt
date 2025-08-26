@@ -4,16 +4,13 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverters
 
 @Database(
     entities = [Subject::class, ClassSchedule::class, AttendanceRecord::class],
-    version = 2, // STEP 1: INCREMENT THE VERSION NUMBER
+    version = 2, // <-- THE VERSION IS INCREASED FROM 1 to 2
     exportSchema = false
 )
-@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
-
     abstract fun attendanceDao(): AttendanceDao
 
     companion object {
@@ -25,9 +22,10 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "attendance_database"
+                    "smart_attendance_db"
                 )
-                    // STEP 2: ADD THIS LINE TO HANDLE THE MIGRATION
+                    // THIS LINE TELLS ROOM TO DELETE AND RECREATE THE DATABASE
+                    // IF THE VERSION NUMBER CHANGES. PERFECT FOR DEVELOPMENT.
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

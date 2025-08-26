@@ -19,30 +19,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesManager = PreferencesManager(application)
     private val applicationContext = application.applicationContext
 
+    val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
     val allAttendanceRecords: Flow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceRecords()
+
+    val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = allSubjects.map { subjects ->
+        subjects.map { subject ->
+            val percentage = getAttendancePercentage(subject.id)
+            SubjectWithAttendance(subject, percentage)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+
     val theme: StateFlow<String> = preferencesManager.themeFlow.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         "System Default"
     )
-    val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
 
     val userName: StateFlow<String> = preferencesManager.userNameFlow.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
         "User"
     )
-
-    val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = allSubjects
-        .flatMapLatest { subjects ->
-            val flows = subjects.map { subject ->
-                flow {
-                    val percentage = getAttendancePercentage(subject.id)
-                    emit(SubjectWithAttendance(subject, percentage))
-                }
-            }
-            combine(flows) { it.toList() }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _showExtraClassDialog = MutableStateFlow(false)
     val showExtraClassDialog: StateFlow<Boolean> = _showExtraClassDialog.asStateFlow()
@@ -137,12 +135,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onHolidayToggleRequested(date: LocalDate) {
         viewModelScope.launch {
-            val dateAsLong = date.toEpochDay()
-            val isAlreadyHoliday = allAttendanceRecords.first()
-                .any { it.date == dateAsLong && it.type == RecordType.HOLIDAY }
+            val isAlreadyHoliday = attendanceDao.getAllAttendanceRecords().first()
+                .any { it.date == date.toEpochDay() && it.type == RecordType.HOLIDAY }
 
             if (isAlreadyHoliday) {
-                attendanceDao.deleteHolidayOnDate(dateAsLong)
+                attendanceDao.deleteHolidayOnDate(date.toEpochDay())
             } else {
                 _showHolidayDialog.value = date
             }
@@ -219,7 +216,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
             }
             attendanceDao.deleteAllSubjects()
-            attendanceDao.deleteAllAttendanceRecords()
         }
     }
 
@@ -259,6 +255,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return if (total > 0) (present.toDouble() / total) * 100 else 0.0
     }
 
+    // Restored functions needed by SubjectDetailScreen
     suspend fun getTotalClassesForSubject(subjectId: Long): Int =
         attendanceDao.getTotalClassesForSubject(subjectId)
 

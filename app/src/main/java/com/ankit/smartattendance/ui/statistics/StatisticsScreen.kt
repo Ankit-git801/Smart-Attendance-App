@@ -22,10 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.models.AttendanceStatistics
+import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.SuccessGreen
 import com.ankit.smartattendance.viewmodel.AppViewModel
@@ -34,10 +34,12 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
+    // This is now the single source of truth for the subjects list.
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState(initial = emptyList())
     var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
-    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
+    // This will now correctly re-run when the list of subjects changes.
     LaunchedEffect(subjectsWithAttendance) {
         coroutineScope.launch {
             stats = appViewModel.getOverallStatistics()
@@ -54,7 +56,7 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier
-                    .padding(paddingValues) // Use padding from Scaffold
+                    .padding(paddingValues)
                     .fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -88,7 +90,7 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
         }
     }
 }
-// ... (The rest of your StatisticsScreen.kt code remains the same)
+
 @Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
     Column(
@@ -246,3 +248,4 @@ private fun SubjectStatCard(
         }
     }
 }
+

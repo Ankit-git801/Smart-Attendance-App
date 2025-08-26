@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -35,8 +37,12 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +53,8 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     var stats by remember { mutableStateOf(Pair(0.0, 0)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var showMarkAttendanceDialog by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
 
     val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId).collectAsState(initial = emptyList())
 
@@ -55,11 +63,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             subject = appViewModel.getSubjectById(subjectId)
             val total = appViewModel.getTotalClassesForSubject(subjectId)
             val present = appViewModel.getPresentClassesForSubject(subjectId)
-            val percentage = if (total > 0) {
-                (present.toDouble() / total) * 100
-            } else {
-                0.0 // Default to 0.0 to prevent crash
-            }
+            val percentage = if (total > 0) (present.toDouble() / total) * 100 else 0.0
             stats = Pair(percentage, total)
         }
     }
@@ -89,6 +93,17 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
         )
     }
 
+    if (showMarkAttendanceDialog && selectedDate != null) {
+        MarkAttendanceDialog(
+            date = selectedDate!!,
+            onDismiss = { showMarkAttendanceDialog = false },
+            onConfirm = { isPresent ->
+                appViewModel.markAttendanceForDate(subjectId, selectedDate!!, isPresent)
+                showMarkAttendanceDialog = false
+            }
+        )
+    }
+
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(subject?.name ?: "Details") },
@@ -112,55 +127,64 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
                 }
             }
             item { Text("Attendance Calendar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            item { AttendanceCalendar(records = attendanceRecords) }
+            item {
+                AttendanceCalendar(
+                    records = attendanceRecords,
+                    onDayClick = { date ->
+                        selectedDate = date
+                        showMarkAttendanceDialog = true
+                    }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun ManualAddAttendanceDialog(
+fun MarkAttendanceDialog(
+    date: LocalDate,
     onDismiss: () -> Unit,
-    onConfirm: (present: Int, absent: Int) -> Unit
+    onConfirm: (Boolean?) -> Unit
 ) {
+    val formatter = DateTimeFormatter.ofPattern("MMMM d, yyyy")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mark Attendance") },
+        text = { Text("What is the status for ${date.format(formatter)}?") },
+        confirmButton = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Button(onClick = { onConfirm(true) }) { Text("Present") }
+                Button(
+                    onClick = { onConfirm(false) },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Absent") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onConfirm(null) }) { Text("Clear") }
+        }
+    )
+}
+
+@Composable
+private fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present: Int, absent: Int) -> Unit) {
     var presentCount by remember { mutableStateOf("") }
     var absentCount by remember { mutableStateOf("") }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Past Attendance") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Enter the number of classes held before you started using the app.")
-                OutlinedTextField(
-                    value = presentCount,
-                    onValueChange = { presentCount = it.filter { c -> c.isDigit() } },
-                    label = { Text("Classes Attended") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = absentCount,
-                    onValueChange = { absentCount = it.filter { c -> c.isDigit() } },
-                    label = { Text("Classes Missed") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
+                OutlinedTextField(value = presentCount, onValueChange = { presentCount = it.filter { c -> c.isDigit() } }, label = { Text("Classes Attended") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                OutlinedTextField(value = absentCount, onValueChange = { absentCount = it.filter { c -> c.isDigit() } }, label = { Text("Classes Missed") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
             }
         },
-        confirmButton = {
-            Button(onClick = {
-                val present = presentCount.toIntOrNull() ?: 0
-                val absent = absentCount.toIntOrNull() ?: 0
-                onConfirm(present, absent)
-            }) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+        confirmButton = { Button({ onConfirm(presentCount.toIntOrNull() ?: 0, absentCount.toIntOrNull() ?: 0) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
@@ -168,12 +192,7 @@ private fun ManualAddAttendanceDialog(
 private fun AttendanceProgressCard(subjectName: String, percentage: Double, target: Int, color: Color) {
     Card(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedCircularProgress(
-                percentage = percentage.toFloat(),
-                color = color,
-                radius = 50.dp,
-                strokeWidth = 8.dp
-            )
+            AnimatedCircularProgress(percentage = percentage.toFloat(), color = color)
             Spacer(Modifier.width(24.dp))
             Column {
                 Text(subjectName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -185,66 +204,76 @@ private fun AttendanceProgressCard(subjectName: String, percentage: Double, targ
 }
 
 @Composable
-private fun AttendanceCalendar(records: List<AttendanceRecord>) {
+private fun AttendanceCalendar(records: List<AttendanceRecord>, onDayClick: (LocalDate) -> Unit) {
     val currentMonth = remember { YearMonth.now() }
     val startMonth = remember { currentMonth.minusMonths(100) }
     val endMonth = remember { currentMonth.plusMonths(100) }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
     val state = rememberCalendarState(startMonth, endMonth, currentMonth, firstDayOfWeek)
+    val daysOfWeek = remember {
+        val days = DayOfWeek.values()
+        if (firstDayOfWeek == DayOfWeek.MONDAY) days else (days.sliceArray(1..6) + days[0])
+    }
 
-    HorizontalCalendar(state = state, dayContent = { day ->
-        val recordForDay = remember(day, records) { records.find { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date } }
-        val dayBackgroundColor = when {
-            recordForDay == null -> Color.Transparent
-            recordForDay.isPresent -> SuccessGreen.copy(alpha = 0.4f)
-            else -> ErrorRed.copy(alpha = 0.4f)
-        }
-        Box(
-            Modifier
-                .aspectRatio(1f)
-                .padding(2.dp)
-                .clip(CircleShape)
-                .background(color = dayBackgroundColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = day.date.dayOfMonth.toString())
-        }
-    })
+    Column {
+        DaysOfWeekTitle(daysOfWeek = daysOfWeek)
+        HorizontalCalendar(
+            state = state,
+            dayContent = { day ->
+                // *** THE FIX IS HERE ***
+                val recordForDay = remember(day.date, records) {
+                    records.find { record -> record.date == day.date.toEpochDay() && record.scheduleId == null }
+                }
+                Day(day, recordForDay, onClick = { onDayClick(it.date) })
+            }
+        )
+    }
 }
 
 @Composable
-fun AnimatedCircularProgress(
-    percentage: Float,
-    color: Color,
-    radius: Dp = 32.dp,
-    strokeWidth: Dp = 4.dp
-) {
-    val animatedPercentage by animateFloatAsState(
-        targetValue = percentage,
-        animationSpec = tween(1000)
-    )
+private fun Day(day: CalendarDay, record: AttendanceRecord?, onClick: (CalendarDay) -> Unit) {
+    val dayBackgroundColor = when {
+        record == null -> Color.Transparent
+        record.isPresent -> SuccessGreen.copy(alpha = 0.4f)
+        else -> ErrorRed.copy(alpha = 0.4f)
+    }
+    Box(
+        Modifier
+            .aspectRatio(1f)
+            .padding(2.dp)
+            .clip(CircleShape)
+            .background(color = dayBackgroundColor)
+            .clickable(enabled = day.date <= LocalDate.now()) { onClick(day) },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = day.date.dayOfMonth.toString())
+    }
+}
 
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawArc(
-                color = color.copy(alpha = 0.3f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = color,
-                startAngle = -90f,
-                sweepAngle = (animatedPercentage / 100) * 360f,
-                useCenter = false,
-                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+@Composable
+private fun DaysOfWeekTitle(daysOfWeek: Array<DayOfWeek>) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        for (dayOfWeek in daysOfWeek) {
+            Text(
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+                text = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold
             )
         }
-        Text(
-            text = "${animatedPercentage.toInt()}%",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold
-        )
+    }
+}
+
+
+@Composable
+fun AnimatedCircularProgress(percentage: Float, color: Color, radius: Dp = 50.dp, strokeWidth: Dp = 8.dp) {
+    val animatedPercentage by animateFloatAsState(targetValue = percentage, animationSpec = tween(1000))
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawArc(color = color.copy(alpha = 0.3f), startAngle = -90f, sweepAngle = 360f, useCenter = false, style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round))
+            drawArc(color = color, startAngle = -90f, sweepAngle = (animatedPercentage / 100) * 360f, useCenter = false, style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round))
+        }
+        Text(text = "${animatedPercentage.toInt()}%", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
