@@ -33,9 +33,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         "User"
     )
 
-    private val _confettiTrigger = MutableStateFlow(0)
-    val confettiTrigger: StateFlow<Int> = _confettiTrigger.asStateFlow()
-
     val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = allSubjects
         .flatMapLatest { subjects ->
             val flows = subjects.map { subject ->
@@ -59,10 +56,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showHolidayDialog = MutableStateFlow<LocalDate?>(null)
     val showHolidayDialog: StateFlow<LocalDate?> = _showHolidayDialog.asStateFlow()
-
-    private fun triggerConfetti() {
-        _confettiTrigger.value++
-    }
 
     fun setTheme(theme: String) {
         viewModelScope.launch { preferencesManager.saveTheme(theme) }
@@ -108,10 +101,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markAttendance(subjectId: Long, scheduleId: Long?, isPresent: Boolean) {
         viewModelScope.launch {
-            val subject = getSubjectById(subjectId) ?: return@launch
-            val target = subject.targetAttendance
-            val oldPercentage = getAttendancePercentage(subjectId)
-
             val today = LocalDate.now().toEpochDay()
             if (scheduleId != null) {
                 if (attendanceDao.countClassRecordsForDay(subjectId, scheduleId, today) > 0) {
@@ -125,20 +114,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 isPresent = isPresent
             )
             attendanceDao.insertAttendanceRecord(record)
-
-            val newPercentage = getAttendancePercentage(subjectId)
-            if (oldPercentage < target && newPercentage >= target) {
-                triggerConfetti()
-            }
         }
     }
 
     fun markAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean?) {
         viewModelScope.launch {
-            val subject = getSubjectById(subjectId) ?: return@launch
-            val target = subject.targetAttendance
-            val oldPercentage = getAttendancePercentage(subjectId)
-
             val dateAsLong = date.toEpochDay()
             attendanceDao.deleteRecordForDate(subjectId, dateAsLong)
 
@@ -151,11 +131,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     type = RecordType.CLASS
                 )
                 attendanceDao.insertAttendanceRecord(newRecord)
-            }
-
-            val newPercentage = getAttendancePercentage(subjectId)
-            if (oldPercentage < target && newPercentage >= target) {
-                triggerConfetti()
             }
         }
     }
@@ -199,10 +174,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
         viewModelScope.launch {
-            val subject = getSubjectById(subjectId) ?: return@launch
-            val target = subject.targetAttendance
-            val oldPercentage = getAttendancePercentage(subjectId)
-
             val record = AttendanceRecord(
                 subjectId = subjectId,
                 scheduleId = null,
@@ -212,20 +183,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
             attendanceDao.insertAttendanceRecord(record)
             hideExtraClassDialog()
-
-            val newPercentage = getAttendancePercentage(subjectId)
-            if (oldPercentage < target && newPercentage >= target) {
-                triggerConfetti()
-            }
         }
     }
 
     fun addManualAttendance(subjectId: Long, presentCount: Int, absentCount: Int) {
         viewModelScope.launch {
-            val subject = getSubjectById(subjectId) ?: return@launch
-            val target = subject.targetAttendance
-            val oldPercentage = getAttendancePercentage(subjectId)
-
             attendanceDao.deleteManualRecordsForSubject(subjectId)
             val manualRecords = mutableListOf<AttendanceRecord>()
             val note = "Manually Added"
@@ -246,11 +208,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             manualRecords.forEach { attendanceDao.insertAttendanceRecord(it) }
-
-            val newPercentage = getAttendancePercentage(subjectId)
-            if (oldPercentage < target && newPercentage >= target) {
-                triggerConfetti()
-            }
         }
     }
 

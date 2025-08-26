@@ -62,9 +62,9 @@ interface AttendanceDao {
     suspend fun countClassRecordsForDay(subjectId: Long, scheduleId: Long, date: Long): Int
 
     // --- Complex / Joined Queries for Statistics ---
-    @Query("SELECT COUNT(*) FROM attendance_records")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE type != 'HOLIDAY'")
     suspend fun getTotalClassesOverall(): Int
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE isPresent = 1")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE isPresent = 1 AND type != 'HOLIDAY'")
     suspend fun getTotalPresentOverall(): Int
     @Query("SELECT COUNT(DISTINCT id) FROM subjects")
     suspend fun getSubjectCount(): Int

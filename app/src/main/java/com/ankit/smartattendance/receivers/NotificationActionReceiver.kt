@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.ankit.smartattendance.data.AppDatabase
 import com.ankit.smartattendance.data.AttendanceRecord
+import com.ankit.smartattendance.services.ReminderService
 import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_SUBJECT_ID = "EXTRA_SUBJECT_ID"
         const val EXTRA_IS_PRESENT = "EXTRA_IS_PRESENT"
         const val EXTRA_NOTIFICATION_ID = "EXTRA_NOTIFICATION_ID"
+        const val EXTRA_SCHEDULE_ID = "EXTRA_SCHEDULE_ID"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -28,11 +30,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val subjectId = intent.getLongExtra(EXTRA_SUBJECT_ID, -1L)
                     val isPresent = intent.getBooleanExtra(EXTRA_IS_PRESENT, false)
                     val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
+                    val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, -1L)
+
+                    // Stop the foreground service
+                    context.stopService(Intent(context, ReminderService::class.java))
 
                     if (subjectId != -1L) {
                         val dao = AppDatabase.getDatabase(context).attendanceDao()
                         val today = LocalDate.now().toEpochDay()
-                        val scheduleId = intent.getLongExtra("EXTRA_SCHEDULE_ID", -1L) // Use a schedule ID if available
 
                         // Prevent duplicate marking
                         if (dao.countClassRecordsForDay(subjectId, scheduleId, today) == 0) {

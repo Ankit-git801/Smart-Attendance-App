@@ -36,19 +36,13 @@ import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import nl.dionsegijn.konfetti.compose.KonfettiView
-import nl.dionsegijn.konfetti.core.Party
-import nl.dionsegijn.konfetti.core.Position
-import nl.dionsegijn.konfetti.core.emitter.Emitter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,15 +57,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
 
     val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId)
         .collectAsState(initial = emptyList())
-    val confettiTrigger by appViewModel.confettiTrigger.collectAsState()
-
-    var showConfetti by remember { mutableStateOf(false) }
-
-    LaunchedEffect(confettiTrigger) {
-        if (confettiTrigger > 0) {
-            showConfetti = true
-        }
-    }
 
     LaunchedEffect(subjectId, attendanceRecords) {
         coroutineScope.launch {
@@ -157,27 +142,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
                         }
                     )
                 }
-            }
-        }
-
-        if (showConfetti) {
-            KonfettiView(
-                modifier = Modifier.fillMaxSize(),
-                parties = listOf(
-                    Party(
-                        speed = 0f,
-                        maxSpeed = 30f,
-                        damping = 0.9f,
-                        spread = 360,
-                        colors = listOf(0xfce18a, 0xff726d, 0xf4306d, 0xb48def),
-                        emitter = Emitter(duration = 100, TimeUnit.MILLISECONDS).max(100),
-                        position = Position.Relative(0.5, 0.3)
-                    )
-                )
-            )
-            LaunchedEffect(Unit) {
-                delay(3000)
-                showConfetti = false
             }
         }
 

@@ -55,7 +55,6 @@ dependencies {
     // Core library desugaring dependency
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
-
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("androidx.activity:activity-compose:1.9.0")
@@ -80,8 +79,8 @@ dependencies {
     // Calendar Library
     implementation("com.kizitonwose.calendar:compose:2.5.1")
 
-    // Confetti Library
-    implementation("nl.dionsegijn:konfetti-compose:2.0.4")
+    // Confetti Library - REMOVED
+    // implementation("nl.dionsegijn:konfetti-compose:2.0.4")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

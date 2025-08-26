@@ -1,5 +1,6 @@
 package com.ankit.smartattendance.utils
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,9 +9,11 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.ankit.smartattendance.MainActivity
+import com.ankit.smartattendance.R // Import the R class
 import com.ankit.smartattendance.data.ClassSchedule
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.receivers.NotificationActionReceiver
+import com.ankit.smartattendance.receivers.NotificationDismissReceiver
 
 object NotificationHelper {
 
@@ -41,8 +44,7 @@ object NotificationHelper {
         }
     }
 
-    fun showAttendanceNotification(context: Context, subject: Subject, schedule: ClassSchedule) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    fun getAttendanceNotification(context: Context, subject: Subject, schedule: ClassSchedule): Notification {
         val notificationId = schedule.id.toInt()
 
         val contentIntent = Intent(context, MainActivity::class.java).apply {
@@ -52,13 +54,14 @@ object NotificationHelper {
 
         val presentRequestCode = notificationId + 20000
         val absentRequestCode = notificationId + 30000
+        val deleteRequestCode = notificationId + 40000
 
         val presentIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_ATTENDANCE
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subject.id)
             putExtra(NotificationActionReceiver.EXTRA_IS_PRESENT, true)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra("EXTRA_SCHEDULE_ID", schedule.id)
+            putExtra(NotificationActionReceiver.EXTRA_SCHEDULE_ID, schedule.id)
         }
         val presentPendingIntent = PendingIntent.getBroadcast(context, presentRequestCode, presentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
@@ -67,28 +70,35 @@ object NotificationHelper {
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subject.id)
             putExtra(NotificationActionReceiver.EXTRA_IS_PRESENT, false)
             putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra("EXTRA_SCHEDULE_ID", schedule.id)
+            putExtra(NotificationActionReceiver.EXTRA_SCHEDULE_ID, schedule.id)
         }
         val absentPendingIntent = PendingIntent.getBroadcast(context, absentRequestCode, absentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+        val deleteIntent = Intent(context, NotificationDismissReceiver::class.java).apply {
+            putExtra("subject_id", subject.id)
+            putExtra("schedule_id", schedule.id)
+        }
+        val deletePendingIntent = PendingIntent.getBroadcast(context, deleteRequestCode, deleteIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher) // CHANGED
             .setContentTitle(subject.name)
             .setContentText("Did you attend the class?")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM) // Use ALARM category
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setFullScreenIntent(contentPendingIntent, true)
             .addAction(0, "Present", presentPendingIntent)
             .addAction(0, "Absent", absentPendingIntent)
-            .setAutoCancel(true)
-
-        notificationManager.notify(notificationId, builder.build())
+            .setOngoing(true)
+            .setDeleteIntent(deletePendingIntent)
+            .build()
     }
 
     fun showUpdatedAttendanceNotification(context: Context, subjectName: String, newPercentage: Double, notificationId: Int) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.mipmap.ic_launcher) // CHANGED
             .setContentTitle("$subjectName Attendance Updated")
             .setContentText("Your new attendance is ${"%.1f".format(newPercentage)}%.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -101,7 +111,7 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val warningNotificationId = subject.id.toInt() + 10000
         val builder = NotificationCompat.Builder(context, WARNING_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setSmallIcon(R.mipmap.ic_launcher) // CHANGED
             .setContentTitle("Low Attendance Alert!")
             .setContentText("Your attendance for ${subject.name} is ${"%.1f".format(currentPercentage)}%, which is below your target of ${subject.targetAttendance}%.")
             .setStyle(NotificationCompat.BigTextStyle().bigText("Your attendance for ${subject.name} is ${"%.1f".format(currentPercentage)}%, which is below your target of ${subject.targetAttendance}%. Take action to improve it."))
