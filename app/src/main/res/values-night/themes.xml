@@ -1,8 +1,8 @@
 <resources>
-    <!-- Base application theme. -->
+    <!-- Base application theme for Dark Mode. -->
     <style name="Theme.SmartAttendance" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- For Light Mode -->
-        <item name="android:windowLightStatusBar">true</item>
+        <!-- For Dark Mode -->
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 </resources>

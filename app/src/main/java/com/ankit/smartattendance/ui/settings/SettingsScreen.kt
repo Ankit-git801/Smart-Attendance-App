@@ -79,7 +79,7 @@ fun SettingsScreen(appViewModel: AppViewModel) {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.padding(paddingValues), // Use padding from Scaffold
+            modifier = Modifier.padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -148,7 +148,7 @@ fun SettingsScreen(appViewModel: AppViewModel) {
         }
     }
 }
-// ... (The rest of your SettingsScreen.kt code remains the same)
+
 @Composable
 fun UserNameDialog(currentName: String, onDismiss: () -> Unit, onNameChange: (String) -> Unit) {
     var name by remember { mutableStateOf(currentName) }
@@ -246,9 +246,7 @@ fun SettingsItem(
     icon: @Composable () -> Unit,
     onClick: () -> Unit
 ) {
-    Card(modifier = Modifier
-        .fillMaxWidth()
-        .clickable(onClick = onClick)) {
+    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically

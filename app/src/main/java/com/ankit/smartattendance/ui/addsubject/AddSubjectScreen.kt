@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -34,6 +33,11 @@ data class UiClassSchedule(
     val localId: UUID = UUID.randomUUID()
 )
 
+val predefinedColors = listOf(
+    "#81C784", "#FF8A65", "#4FC3F7", "#F06292", "#FFD54F",
+    "#9575CD", "#4DB6AC", "#A1887F", "#7986CB"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddSubjectScreen(
@@ -42,7 +46,7 @@ fun AddSubjectScreen(
     appViewModel: AppViewModel
 ) {
     var subjectName by remember { mutableStateOf("") }
-    var subjectColor by remember { mutableStateOf(Color(0xFF81C784)) } // Default color
+    var subjectColor by remember { mutableStateOf(predefinedColors.first()) }
     var attendanceTarget by remember { mutableStateOf(75) }
     var schedules by remember { mutableStateOf<List<UiClassSchedule>>(emptyList()) }
     var showAddScheduleDialog by remember { mutableStateOf(false) }
@@ -53,7 +57,7 @@ fun AddSubjectScreen(
         if (isEditMode) {
             appViewModel.getSubjectById(subjectId)?.let { subject ->
                 subjectName = subject.name
-                subjectColor = Color(android.graphics.Color.parseColor(subject.color))
+                subjectColor = subject.color
                 attendanceTarget = subject.targetAttendance
             }
             schedules = appViewModel.getSchedulesForSubject(subjectId).map { UiClassSchedule(it) }
@@ -72,11 +76,10 @@ fun AddSubjectScreen(
                 actions = {
                     Button(
                         onClick = {
-                            val hexColor = String.format("#%06X", (0xFFFFFF and subjectColor.toArgb()))
                             val newSubject = Subject(
                                 id = if (isEditMode) subjectId else 0,
                                 name = subjectName,
-                                color = hexColor,
+                                color = subjectColor,
                                 targetAttendance = attendanceTarget
                             )
                             appViewModel.addOrUpdateSubject(newSubject, schedules.map { it.schedule })
@@ -103,7 +106,7 @@ fun AddSubjectScreen(
                     onValueChange = { subjectName = it },
                     label = { Text("Subject Name") },
                     modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = { Icon(Icons.Default.Edit, null) }
+                    leadingIcon = { Icon(Icons.Default.Book, null) }
                 )
             }
             item { ColorPicker(selectedColor = subjectColor, onColorSelected = { subjectColor = it }) }
@@ -151,28 +154,23 @@ fun AddSubjectScreen(
 }
 
 @Composable
-private fun ColorPicker(selectedColor: Color, onColorSelected: (Color) -> Unit) {
-    val colors = listOf(
-        Color(0xFFF44336), Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF673AB7),
-        Color(0xFF3F51B5), Color(0xFF2196F3), Color(0xFF03A9F4), Color(0xFF00BCD4),
-        Color(0xFF009688), Color(0xFF4CAF50), Color(0xFF8BC34A), Color(0xFFCDDC39),
-        Color(0xFFFFEB3B), Color(0xFFFFC107), Color(0xFFFF9800), Color(0xFF795548)
-    )
+private fun ColorPicker(selectedColor: String, onColorSelected: (String) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text("Subject Color", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(colors) { color ->
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(predefinedColors) { color ->
+                    val isSelected = color == selectedColor
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(color)
+                            .background(Color(android.graphics.Color.parseColor(color)))
                             .clickable { onColorSelected(color) }
                             .border(
-                                width = if (color == selectedColor) 2.dp else 0.dp,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                width = if (isSelected) 2.dp else 0.dp,
+                                color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
                                 shape = CircleShape
                             )
                     )
@@ -204,6 +202,8 @@ private fun AttendanceTargetSlider(target: Int, onTargetChange: (Int) -> Unit) {
 private fun ScheduleCard(schedule: ClassSchedule, onDelete: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(getDayName(schedule.dayOfWeek), fontWeight = FontWeight.Bold)
                 Text("${formatTime(schedule.startHour, schedule.startMinute)} - ${formatTime(schedule.endHour, schedule.endMinute)}")
@@ -234,11 +234,20 @@ private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedu
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Class Schedule") },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.CalendarToday, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Add Class Schedule")
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column {
+                Divider(modifier = Modifier.padding(bottom = 16.dp))
                 DaySelector(selectedDay) { selectedDay = it }
+                Spacer(Modifier.height(16.dp))
                 TimeSelector("Start Time", startHour, startMinute) { startTimePickerDialog.show() }
+                Spacer(Modifier.height(8.dp))
                 TimeSelector("End Time", endHour, endMinute) { endTimePickerDialog.show() }
             }
         },
@@ -248,7 +257,9 @@ private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedu
                 onDismiss()
             }) { Text("Add") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
     )
 }
 
@@ -282,7 +293,7 @@ private fun TimeSelector(label: String, hour: Int, minute: Int, onClick: () -> U
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, style = MaterialTheme.typography.titleMedium)
-        Button(onClick = onClick) {
+        OutlinedButton(onClick = onClick) {
             Text(formatTime(hour, minute))
         }
     }

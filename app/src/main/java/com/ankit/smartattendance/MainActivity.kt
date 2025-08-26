@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -133,14 +134,30 @@ fun RequestBatteryOptimizationPermission() {
 @Composable
 fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+
+    // List of top-level destinations where the bottom bar should be visible
+    val topLevelDestinations = listOf(
+        BottomNavItem.Home.route,
+        BottomNavItem.Calendar.route,
+        BottomNavItem.Statistics.route,
+        BottomNavItem.Settings.route
+    )
+    val showBottomBar = topLevelDestinations.any { it == currentDestination?.route }
+
     Scaffold(
-        modifier = Modifier.systemBarsPadding(), // Apply system bar padding to the Scaffold
-        bottomBar = { BottomNavigationBar(navController = navController) }
-    ) { innerPadding -> // This padding is now aware of the system bars
+        modifier = Modifier.systemBarsPadding(),
+        bottomBar = {
+            if (showBottomBar) {
+                BottomNavigationBar(navController = navController)
+            }
+        }
+    ) { innerPadding ->
         AppNavigation(
             navController = navController,
             appViewModel = appViewModel,
-            modifier = Modifier.padding(innerPadding) // Apply padding here
+            modifier = Modifier.padding(innerPadding)
         )
     }
 }
@@ -154,7 +171,7 @@ fun AppNavigation(
     NavHost(
         navController = navController,
         startDestination = BottomNavItem.Home.route,
-        modifier = modifier, // Use the modifier passed from Scaffold
+        modifier = modifier,
         enterTransition = { fadeIn(animationSpec = tween(350)) },
         exitTransition = { fadeOut(animationSpec = tween(350)) },
         popEnterTransition = { fadeIn(animationSpec = tween(350)) },
@@ -200,11 +217,11 @@ fun BottomNavigationBar(navController: NavHostController) {
         BottomNavItem.Settings
     )
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+    val currentDestination = navBackStackEntry?.destination
 
     NavigationBar {
         items.forEach { item ->
-            val selected = currentRoute == item.route
+            val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
             NavigationBarItem(
                 icon = {
                     Icon(

@@ -71,7 +71,7 @@ fun CalendarScreen(appViewModel: AppViewModel) {
         }
     }
 }
-// ... (The rest of your CalendarScreen.kt code remains the same)
+
 @Composable
 private fun MonthTitle(month: YearMonth) {
     val monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
