@@ -140,7 +140,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 fontWeight = FontWeight.Bold
             )
         }
-
         if (subjects.isEmpty()) {
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
@@ -169,7 +168,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
         }
     }
 }
-// ... (The rest of your HomeScreen.kt code remains the same)
 @Composable
 private fun QuickActions(onExtraClassClick: () -> Unit, onNewSubjectClick: () -> Unit) {
     Card(
@@ -284,7 +282,6 @@ private fun ExtraClassDialog(
         }
     )
 }
-
 @Composable
 fun TodayScheduleCard(
     scheduleWithSubject: ScheduleWithSubject,
@@ -292,12 +289,19 @@ fun TodayScheduleCard(
     onMark: (Boolean) -> Unit
 ) {
     val records by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
-    val isAlreadyMarked = remember(records, scheduleWithSubject.schedule.id) {
+
+    // --- BUG FIX ---
+    // The logic is updated to check for ANY attendance record for this subject today,
+    // not just one linked to a specific schedule. This ensures that marking attendance
+    // from the detail screen's calendar correctly updates the home screen UI.
+    val isAlreadyMarked = remember(records, scheduleWithSubject.subject.id) {
         val todayEpochDay = LocalDate.now().toEpochDay()
         records.any { record ->
-            record.scheduleId == scheduleWithSubject.schedule.id && record.date == todayEpochDay
+            record.subjectId == scheduleWithSubject.subject.id && record.date == todayEpochDay
         }
     }
+    // --- END BUG FIX ---
+
     val subject = scheduleWithSubject.subject
     val schedule = scheduleWithSubject.schedule
     val startTime = formatTime(schedule.startHour, schedule.startMinute)

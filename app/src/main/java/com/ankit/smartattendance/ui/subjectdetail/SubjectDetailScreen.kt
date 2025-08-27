@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -139,7 +140,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
         }
     }
 }
-
 @Composable
 fun MarkAttendanceDialog(
     date: LocalDate,
@@ -202,7 +202,6 @@ private fun AttendanceProgressCard(subjectName: String, percentage: Double, targ
         }
     }
 }
-
 @Composable
 private fun AttendanceCalendar(records: List<AttendanceRecord>, onDayClick: (LocalDate) -> Unit) {
     val currentMonth = remember { YearMonth.now() }
@@ -232,6 +231,8 @@ private fun AttendanceCalendar(records: List<AttendanceRecord>, onDayClick: (Loc
 
 @Composable
 private fun Day(day: CalendarDay, record: AttendanceRecord?, onClick: (CalendarDay) -> Unit) {
+    val isToday = day.date == LocalDate.now()
+
     val dayBackgroundColor = when {
         record == null -> Color.Transparent
         record.isPresent -> SuccessGreen.copy(alpha = 0.4f)
@@ -243,10 +244,19 @@ private fun Day(day: CalendarDay, record: AttendanceRecord?, onClick: (CalendarD
             .padding(2.dp)
             .clip(CircleShape)
             .background(color = dayBackgroundColor)
+            .border( // Add the border modifier for today's date
+                width = if (isToday) 2.dp else 0.dp,
+                color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = CircleShape
+            )
             .clickable(enabled = day.date <= LocalDate.now()) { onClick(day) },
         contentAlignment = Alignment.Center
     ) {
-        Text(text = day.date.dayOfMonth.toString())
+        Text(
+            text = day.date.dayOfMonth.toString(),
+            color = if (isToday) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
+        )
     }
 }
 

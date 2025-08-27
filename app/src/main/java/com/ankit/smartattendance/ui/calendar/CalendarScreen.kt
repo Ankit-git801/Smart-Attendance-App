@@ -1,6 +1,7 @@
 package com.ankit.smartattendance.ui.calendar
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -107,6 +108,8 @@ private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick
         allRecords.filter { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date }
     }
 
+    val isToday = day.date == LocalDate.now()
+
     val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
     val wasPresent = recordsForDay.any { it.type != RecordType.HOLIDAY && it.isPresent }
     val wasAbsent = recordsForDay.any { it.type != RecordType.HOLIDAY && !it.isPresent }
@@ -125,16 +128,23 @@ private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick
             .padding(4.dp)
             .clip(CircleShape)
             .background(color = dayBackgroundColor)
+            .border( // Add the border modifier for today's date
+                width = if (isToday) 2.dp else 0.dp,
+                color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = CircleShape
+            )
             .clickable(onClick = { onDayClick(day.date) }),
         contentAlignment = Alignment.Center
     ) {
         val textColor = when {
             day.date > LocalDate.now() && !isHoliday -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+            isToday -> MaterialTheme.colorScheme.primary
             else -> LocalContentColor.current
         }
         Text(
             text = day.date.dayOfMonth.toString(),
-            color = textColor
+            color = textColor,
+            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
         )
     }
 }

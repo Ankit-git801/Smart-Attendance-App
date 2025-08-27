@@ -45,6 +45,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _showExtraClassDialog = MutableStateFlow(false)
     val showExtraClassDialog: StateFlow<Boolean> = _showExtraClassDialog.asStateFlow()
 
+    // This is now correctly filtered for holidays
     val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> =
         getTodaysSchedule().stateIn(
             viewModelScope,
@@ -226,13 +227,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>> =
         attendanceDao.getAttendanceRecordsForSubject(subjectId)
 
+    /**
+     * THE FIX IS HERE.
+     * This function now combines three sources: the day's schedules, the list of all subjects,
+     * and the list of all attendance records. It then checks if today is a holiday. If it is,
+     * it returns an empty list. Otherwise, it returns the normally scheduled classes.
+     */
     private fun getTodaysSchedule(): Flow<List<ScheduleWithSubject>> {
         val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-        return attendanceDao.getSchedulesForDay(today).combine(allSubjects) { schedules, subjects ->
-            schedules.mapNotNull { schedule ->
-                subjects.find { it.id == schedule.subjectId }
-                    ?.let { ScheduleWithSubject(schedule, it) }
-            }.sortedBy { it.schedule.startHour }
+        val todayEpochDay = LocalDate.now().toEpochDay()
+
+        return combine(
+            attendanceDao.getSchedulesForDay(today),
+            allSubjects,
+            allAttendanceRecords
+        ) { schedules, subjects, records ->
+            val isTodayHoliday = records.any { it.date == todayEpochDay && it.type == RecordType.HOLIDAY }
+
+            if (isTodayHoliday) {
+                emptyList() // If it's a holiday, return an empty list of classes.
+            } else {
+                schedules.mapNotNull { schedule ->
+                    subjects.find { it.id == schedule.subjectId }
+                        ?.let { ScheduleWithSubject(schedule, it) }
+                }.sortedBy { it.schedule.startHour }
+            }
         }
     }
 
@@ -255,7 +274,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         return if (total > 0) (present.toDouble() / total) * 100 else 0.0
     }
 
-    // Restored functions needed by SubjectDetailScreen
     suspend fun getTotalClassesForSubject(subjectId: Long): Int =
         attendanceDao.getTotalClassesForSubject(subjectId)
 
