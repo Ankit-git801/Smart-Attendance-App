@@ -83,4 +83,4 @@ Most students struggle with tracking attendance vs. university requirements. Thi
 ## 🚀 Getting Started
 
 ```bash
-git clone https://github.com/<your-username>/Smart-Attendance-App.git
+git clone 
