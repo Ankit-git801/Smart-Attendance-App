@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.AttendanceRecord
+import com.ankit.smartattendance.data.BunkAnalysis
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.SuccessGreen
@@ -50,7 +51,6 @@ sealed class AttendanceAction {
     object ExtraClass : AttendanceAction()
     object ClearRegular : AttendanceAction()
     object ClearExtra : AttendanceAction()
-    object ClearAll : AttendanceAction()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,8 +63,10 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     var showManualAddDialog by remember { mutableStateOf(false) }
     var showMarkAttendanceDialog by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+    var bunkAnalysis by remember { mutableStateOf<BunkAnalysis?>(null) }
 
-    val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId).collectAsState(initial = emptyList())
+    val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId)
+        .collectAsState(initial = emptyList())
 
     LaunchedEffect(subjectId, attendanceRecords) {
         coroutineScope.launch {
@@ -73,6 +75,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             val present = appViewModel.getPresentClassesForSubject(subjectId)
             val percentage = if (total > 0) (present.toDouble() / total) * 100 else 0.0
             stats = Pair(percentage, total)
+            bunkAnalysis = appViewModel.calculateBunkAnalysis(subjectId)
         }
     }
 
@@ -82,10 +85,13 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             title = { Text("Delete Subject") },
             text = { Text("Are you sure you want to delete '${subject?.name}'? This action cannot be undone.") },
             confirmButton = {
-                Button(onClick = {
-                    subject?.let { appViewModel.deleteSubject(it) }
-                    navController.popBackStack()
-                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
+                Button(
+                    onClick = {
+                        subject?.let { appViewModel.deleteSubject(it) }
+                        navController.popBackStack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
             },
             dismissButton = { TextButton({ showDeleteDialog = false }) { Text("Cancel") } }
         )
@@ -117,7 +123,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
                         AttendanceAction.ExtraClass -> appViewModel.markExtraClassAttendanceForDate(subjectId, date)
                         AttendanceAction.ClearRegular -> appViewModel.clearRegularAttendanceForDate(subjectId, date)
                         AttendanceAction.ClearExtra -> appViewModel.clearExtraClassAttendanceForDate(subjectId, date)
-                        AttendanceAction.ClearAll -> appViewModel.markAttendanceForDate(subjectId, date, null)
                     }
                 }
                 showMarkAttendanceDialog = false
@@ -136,7 +141,13 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             }
         )
     }) { paddingValues ->
-        LazyColumn(Modifier.fillMaxSize().padding(paddingValues).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyColumn(
+            Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             item {
                 subject?.let {
                     AttendanceProgressCard(
@@ -147,7 +158,21 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
                     )
                 }
             }
-            item { Text("Attendance Calendar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            item {
+                bunkAnalysis?.let { analysis ->
+                    subject?.let {
+                        BunkAnalysisCard(analysis = analysis, subject = it)
+                    }
+                }
+            }
+            item {
+                Text(
+                    "Attendance Calendar",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
             item {
                 AttendanceCalendar(
                     records = attendanceRecords,
@@ -169,7 +194,6 @@ fun MarkAttendanceDialog(
     onConfirm: (AttendanceAction) -> Unit
 ) {
     val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
-
     val hasRegularClass = recordsForDay.any { it.scheduleId != null }
     val hasExtraClass = recordsForDay.any { it.scheduleId == null }
 
@@ -178,7 +202,11 @@ fun MarkAttendanceDialog(
         title = { Text("Update Attendance") },
         text = {
             Column {
-                Text(date.format(formatter), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 16.dp))
+                Text(
+                    date.format(formatter),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
                 Text("Regular Class", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Divider(modifier = Modifier.padding(bottom = 8.dp))
@@ -231,14 +259,52 @@ private fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Enter the number of classes held before you started using the app.")
-                OutlinedTextField(value = presentCount, onValueChange = { presentCount = it.filter { c -> c.isDigit() } }, label = { Text("Classes Attended") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                OutlinedTextField(value = absentCount, onValueChange = { absentCount = it.filter { c -> c.isDigit() } }, label = { Text("Classes Missed") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                OutlinedTextField(
+                    value = presentCount,
+                    onValueChange = { presentCount = it.filter { c -> c.isDigit() } },
+                    label = { Text("Classes Attended") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = absentCount,
+                    onValueChange = { absentCount = it.filter { c -> c.isDigit() } },
+                    label = { Text("Classes Missed") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
             }
         },
         confirmButton = { Button({ onConfirm(presentCount.toIntOrNull() ?: 0, absentCount.toIntOrNull() ?: 0) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
+
+@Composable
+private fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Bunking Guide",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+
+            val message = when {
+                analysis.classesToAttend > 0 -> "You need to attend the next ${analysis.classesToAttend} class(es) to reach your ${subject.targetAttendance}% target."
+                analysis.classesToBunk > 0 -> "You can safely bunk the next ${analysis.classesToBunk} class(es) and maintain your ${subject.targetAttendance}% target."
+                else -> "Your attendance is exactly at the target. Attend the next class to be safe!"
+            }
+            Text(message, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
 
 @Composable
 private fun AttendanceProgressCard(subjectName: String, percentage: Double, target: Int, color: Color) {
@@ -254,6 +320,7 @@ private fun AttendanceProgressCard(subjectName: String, percentage: Double, targ
         }
     }
 }
+
 @Composable
 private fun AttendanceCalendar(records: List<AttendanceRecord>, onDayClick: (LocalDate) -> Unit) {
     val currentMonth = remember { YearMonth.now() }
@@ -295,8 +362,7 @@ private fun Day(day: CalendarDay, records: List<AttendanceRecord>, onClick: (Cal
         wasAbsent -> ErrorRed.copy(alpha = 0.4f)
         else -> Color.Transparent
     }
-    // **THE FIX IS HERE**: The parent Box now handles the click, and a separate inner Box is used
-    // for the main date display, allowing the 'E' indicator to be positioned outside of it.
+
     Box(
         Modifier
             .aspectRatio(1f)
@@ -305,7 +371,7 @@ private fun Day(day: CalendarDay, records: List<AttendanceRecord>, onClick: (Cal
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize(0.9f) // Make the date circle slightly smaller
+                .fillMaxSize(0.9f)
                 .clip(CircleShape)
                 .background(color = dayBackgroundColor)
                 .border(
@@ -326,7 +392,6 @@ private fun Day(day: CalendarDay, records: List<AttendanceRecord>, onClick: (Cal
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    // No padding needed, as it's now positioned relative to the outer box
                     .size(12.dp)
                     .background(MaterialTheme.colorScheme.primary, CircleShape),
                 contentAlignment = Alignment.Center
@@ -360,12 +425,28 @@ private fun DaysOfWeekTitle(daysOfWeek: Array<DayOfWeek>) {
 
 @Composable
 fun AnimatedCircularProgress(percentage: Float, color: Color, radius: Dp = 50.dp, strokeWidth: Dp = 8.dp) {
-    val animatedPercentage by animateFloatAsState(targetValue = percentage, animationSpec = tween(1000))
+    val animatedPercentage by animateFloatAsState(targetValue = percentage, animationSpec = tween(1000), label = "")
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            drawArc(color = color.copy(alpha = 0.3f), startAngle = -90f, sweepAngle = 360f, useCenter = false, style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round))
-            drawArc(color = color, startAngle = -90f, sweepAngle = (animatedPercentage / 100) * 360f, useCenter = false, style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round))
+            drawArc(
+                color = color.copy(alpha = 0.3f),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = color,
+                startAngle = -90f,
+                sweepAngle = (animatedPercentage / 100) * 360f,
+                useCenter = false,
+                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
+            )
         }
-        Text(text = "${animatedPercentage.toInt()}%", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+        Text(
+            text = "${animatedPercentage.toInt()}%",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold
+        )
     }
 }

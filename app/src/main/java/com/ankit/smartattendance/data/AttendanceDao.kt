@@ -1,6 +1,7 @@
 package com.ankit.smartattendance.data
 
 import androidx.room.*
+import com.ankit.smartattendance.models.SubjectWithAttendance
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -59,11 +60,9 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date")
     suspend fun deleteRecordsForSubjectOnDate(subjectId: Long, date: Long)
 
-    // **NEW**: Query to delete only the regular (scheduled) class for a specific day.
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId IS NOT NULL")
     suspend fun deleteRegularRecordForDate(subjectId: Long, date: Long)
 
-    // **NEW**: Query to delete only extra classes for a specific day.
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId IS NULL")
     suspend fun deleteExtraClassRecordForDate(subjectId: Long, date: Long)
 
@@ -82,7 +81,6 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
     suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
 
-
     // --- Statistics Queries ---
     @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL')")
     suspend fun getTotalClassesOverall(): Int
@@ -95,4 +93,14 @@ interface AttendanceDao {
 
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')")
     suspend fun getPresentClassesForSubject(subjectId: Long): Int
+
+    // --- Combined Queries for Performance ---
+    @Query("""
+        SELECT 
+            s.*,
+            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND (type = 'CLASS' OR type = 'MANUAL')) as totalClasses,
+            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')) as presentClasses
+        FROM subjects s
+    """)
+    fun getSubjectsWithAttendance(): Flow<List<SubjectWithAttendance>>
 }

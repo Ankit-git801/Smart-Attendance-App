@@ -23,7 +23,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.ui.theme.ErrorRed
@@ -34,12 +33,12 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
-    // This is now the single source of truth for the subjects list.
-    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState(initial = emptyList())
+    // OPTIMIZED: This state flow is now the single source of truth.
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    // This will now correctly re-run when the list of subjects changes.
+    // This LaunchedEffect now only runs to get the overall stats.
     LaunchedEffect(subjectsWithAttendance) {
         coroutineScope.launch {
             stats = appViewModel.getOverallStatistics()
@@ -79,11 +78,11 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
                     )
                 }
 
+                // OPTIMIZED: The items block now directly uses the efficient data model.
                 items(subjectsWithAttendance, key = { it.subject.id }) { subjectWithAttendance ->
                     SubjectStatCard(
                         navController = navController,
-                        subject = subjectWithAttendance.subject,
-                        percentage = subjectWithAttendance.percentage
+                        subjectWithAttendance = subjectWithAttendance
                     )
                 }
             }
@@ -122,7 +121,6 @@ private fun EmptyState(modifier: Modifier = Modifier) {
     }
 }
 
-
 @Composable
 private fun OverallPerformanceCard(stats: AttendanceStatistics) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -160,7 +158,7 @@ private fun DonutChart(
     val animatedPercentage by animateFloatAsState(
         targetValue = percentage,
         animationSpec = tween(durationMillis = 1000),
-        label = ""
+        label = "donut_chart_progress"
     )
 
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
@@ -215,12 +213,15 @@ private fun StatItem(
     }
 }
 
+// OPTIMIZED: This composable now takes the efficient data model.
 @Composable
 private fun SubjectStatCard(
     navController: NavController,
-    subject: Subject,
-    percentage: Double
+    subjectWithAttendance: SubjectWithAttendance
 ) {
+    val subject = subjectWithAttendance.subject
+    val percentage = subjectWithAttendance.percentage
+
     Card(
         modifier = Modifier
             .fillMaxWidth()

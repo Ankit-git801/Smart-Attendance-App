@@ -22,12 +22,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
     val allAttendanceRecords: Flow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceRecords()
 
-    val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = allSubjects.map { subjects ->
-        subjects.map { subject ->
-            val percentage = getAttendancePercentage(subject.id)
-            SubjectWithAttendance(subject, percentage)
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // OPTIMIZED: This now directly uses the efficient DAO query.
+    val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = attendanceDao.getSubjectsWithAttendance()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val theme: StateFlow<String> = preferencesManager.themeFlow.stateIn(
         viewModelScope,
@@ -114,7 +111,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun markAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean?) {
         viewModelScope.launch {
             val dateAsLong = date.toEpochDay()
-            // Clear only the regular class record before setting a new one.
             attendanceDao.deleteRegularRecordForDate(subjectId, dateAsLong)
 
             if (isPresent != null) {
@@ -144,14 +140,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // **NEW**: Function to clear only regular class attendance for a date.
     fun clearRegularAttendanceForDate(subjectId: Long, date: LocalDate) {
         viewModelScope.launch {
             attendanceDao.deleteRegularRecordForDate(subjectId, date.toEpochDay())
         }
     }
 
-    // **NEW**: Function to clear only extra class attendance for a date.
     fun clearExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
         viewModelScope.launch {
             attendanceDao.deleteExtraClassRecordForDate(subjectId, date.toEpochDay())
@@ -245,11 +239,54 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun getSubjectById(subjectId: Long): Subject? = attendanceDao.getSubjectById(subjectId)
+
     suspend fun getSchedulesForSubject(subjectId: Long): List<ClassSchedule> =
         attendanceDao.getSchedulesForSubject(subjectId)
 
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>> =
         attendanceDao.getAttendanceRecordsForSubject(subjectId)
+
+    suspend fun calculateBunkAnalysis(subjectId: Long): BunkAnalysis {
+        val subject = getSubjectById(subjectId) ?: return BunkAnalysis(0, 0)
+        var attended = getPresentClassesForSubject(subjectId)
+        var total = getTotalClassesForSubject(subjectId)
+        val target = subject.targetAttendance.toDouble()
+
+        if (total == 0) {
+            return BunkAnalysis(0, 0)
+        }
+
+        val currentPercentage = (attended.toDouble() / total) * 100
+
+        return if (currentPercentage >= target) {
+            var bunksAllowed = 0
+            while (true) {
+                val futureTotal = total + 1
+                val futurePercentage = (attended.toDouble() / futureTotal) * 100
+                if (futurePercentage < target) {
+                    break
+                }
+                total++
+                bunksAllowed++
+            }
+            BunkAnalysis(classesToBunk = bunksAllowed, classesToAttend = 0)
+        } else {
+            var mustAttend = 0
+            while (true) {
+                if (total + mustAttend == 0) {
+                    mustAttend++
+                    continue
+                }
+                val futurePercentage = ((attended + mustAttend).toDouble() / (total + mustAttend)) * 100
+                if (futurePercentage >= target) {
+                    break
+                }
+                mustAttend++
+                if (mustAttend > total * 2) break // Safety break to prevent infinite loops
+            }
+            BunkAnalysis(classesToBunk = 0, classesToAttend = mustAttend)
+        }
+    }
 
     private fun getTodaysSchedule(): Flow<List<ScheduleWithSubject>> {
         val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
@@ -286,12 +323,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    suspend fun getAttendancePercentage(subjectId: Long): Double {
-        val total = attendanceDao.getTotalClassesForSubject(subjectId)
-        val present = attendanceDao.getPresentClassesForSubject(subjectId)
-        return if (total > 0) (present.toDouble() / total) * 100 else 0.0
-    }
-
+    // These individual suspend functions remain for single-use cases like the Bunk Analysis
     suspend fun getTotalClassesForSubject(subjectId: Long): Int =
         attendanceDao.getTotalClassesForSubject(subjectId)
 

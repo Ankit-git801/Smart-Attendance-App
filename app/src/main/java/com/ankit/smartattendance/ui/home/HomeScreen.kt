@@ -31,6 +31,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.models.ScheduleWithSubject
+import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.SuccessGreen
 import com.ankit.smartattendance.viewmodel.AppViewModel
@@ -52,29 +53,29 @@ private fun getGreeting(): String {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
-    val subjects by appViewModel.allSubjects.collectAsState(initial = emptyList())
+    // OPTIMIZED: This state flow is now much more efficient.
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     val todaysSchedule by appViewModel.todaysScheduleWithSubjects.collectAsState()
     val userName by appViewModel.userName.collectAsState()
 
-    // States to manage the two-step dialog process for adding an extra class.
     var showExtraClassConfirmationDialog by remember { mutableStateOf(false) }
     var showExtraClassSubjectDialog by remember { mutableStateOf(false) }
 
-    // The first dialog: confirms if the user wants to add an extra class for today.
     if (showExtraClassConfirmationDialog) {
         ExtraClassConfirmationDialog(
             onDismiss = { showExtraClassConfirmationDialog = false },
             onConfirm = {
                 showExtraClassConfirmationDialog = false
-                showExtraClassSubjectDialog = true // If confirmed, open the second dialog.
+                showExtraClassSubjectDialog = true
             }
         )
     }
 
-    // The second dialog: allows the user to select the subject for the extra class.
     if (showExtraClassSubjectDialog) {
+        // Pass the list of subjects by mapping the combined model
+        val allSubjects = subjectsWithAttendance.map { it.subject }
         ExtraClassSubjectDialog(
-            subjects = subjects,
+            subjects = allSubjects,
             onDismiss = { showExtraClassSubjectDialog = false },
             onConfirm = { subjectId, isPresent ->
                 appViewModel.markExtraClassAttendance(subjectId, isPresent, "Extra Class")
@@ -92,7 +93,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             GreetingCard(userName = userName)
             Spacer(modifier = Modifier.height(24.dp))
             QuickActions(
-                onExtraClassClick = { showExtraClassConfirmationDialog = true }, // This now triggers the confirmation dialog.
+                onExtraClassClick = { showExtraClassConfirmationDialog = true },
                 onNewSubjectClick = { navController.navigate("add_subject") }
             )
         }
@@ -149,7 +150,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             )
         }
 
-        if (subjects.isEmpty()) {
+        if (subjectsWithAttendance.isEmpty()) {
             item {
                 EmptyState(
                     icon = Icons.Filled.School,
@@ -160,7 +161,8 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 )
             }
         } else {
-            itemsIndexed(subjects, key = { _, item -> "subject_${item.id}" }) { index, subject ->
+            // OPTIMIZED: The lazy column now uses the combined data model directly.
+            itemsIndexed(subjectsWithAttendance, key = { _, item -> "subject_${item.subject.id}" }) { index, subjectWithAttendance ->
                 var visible by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     delay(index * 100L)
@@ -174,8 +176,8 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                     ),
                     exit = fadeOut()
                 ) {
-                    SubjectCard(subject = subject, appViewModel = appViewModel) {
-                        navController.navigate("subject_detail/${subject.id}")
+                    SubjectCard(subjectWithAttendance = subjectWithAttendance) {
+                        navController.navigate("subject_detail/${subjectWithAttendance.subject.id}")
                     }
                 }
             }
@@ -183,7 +185,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     }
 }
 
-// This is the new confirmation dialog.
 @Composable
 private fun ExtraClassConfirmationDialog(
     onDismiss: () -> Unit,
@@ -299,7 +300,6 @@ private fun EmptyState(
     }
 }
 
-
 @Composable
 private fun QuickActions(onExtraClassClick: () -> Unit, onNewSubjectClick: () -> Unit) {
     Card(
@@ -337,7 +337,6 @@ private fun QuickActions(onExtraClassClick: () -> Unit, onNewSubjectClick: () ->
     }
 }
 
-// Renamed for clarity, this is the dialog for selecting the subject.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExtraClassSubjectDialog(
@@ -486,7 +485,7 @@ fun TodayScheduleCard(
                                 fadeOut(animationSpec = tween(300)) using
                                 SizeTransform(clip = false)
                     },
-                    modifier = Modifier.align(Alignment.End), label = ""
+                    modifier = Modifier.align(Alignment.End), label = "attendance_buttons"
                 ) { marked ->
                     if (marked) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -553,14 +552,12 @@ private fun formatTime(hour: Int, minute: Int): String {
     return SimpleDateFormat("h:mm a", Locale.getDefault()).format(calendar.time)
 }
 
+// OPTIMIZED: This composable is now more efficient.
 @Composable
-fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Unit) {
-    var percentage by remember { mutableStateOf<Double?>(null) }
+fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, onClick: () -> Unit) {
+    val subject = subjectWithAttendance.subject
+    val percentage = subjectWithAttendance.percentage
     val subjectColor = Color(android.graphics.Color.parseColor(subject.color))
-
-    LaunchedEffect(subject.id, appViewModel.allAttendanceRecords) {
-        percentage = appViewModel.getAttendancePercentage(subject.id)
-    }
 
     Card(
         modifier = Modifier
@@ -583,20 +580,19 @@ fun SubjectCard(subject: Subject, appViewModel: AppViewModel, onClick: () -> Uni
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            percentage?.let {
-                val animatedPercentage by animateFloatAsState(
-                    targetValue = it.toFloat(),
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = ""
-                )
-                AnimatedCircularProgress(
-                    percentage = animatedPercentage,
-                    color = subjectColor
-                )
-            }
+
+            val animatedPercentage by animateFloatAsState(
+                targetValue = percentage.toFloat(),
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "subject_card_progress"
+            )
+            AnimatedCircularProgress(
+                percentage = animatedPercentage,
+                color = subjectColor
+            )
         }
     }
 }
