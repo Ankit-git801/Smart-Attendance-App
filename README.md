@@ -1,74 +1,86 @@
-# Smart Attendance App
+# 📱 Smart Attendance App ✨📚
 
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Kotlin](https://img.shields.io/badge/Kotlin-100%25-blueviolet.svg)
-![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-brightgreen.svg)
-
-A modern, offline-first attendance tracking application for Android, built with 100% Kotlin and the latest Jetpack Compose toolkit. This app helps students monitor their class attendance, track their progress towards target percentages, and receive timely reminders for upcoming classes.
+Offline-first, modern Android app to track class attendance, hit targets, and get timely reminders — built with **Kotlin** and **Jetpack Compose**.
 
 ---
 
-## 📸 Screenshots
+## ⚡ Why this project?
+Most students struggle with tracking attendance vs. university requirements. This app ensures reliable, automated attendance tracking that works fully offline, with smart reminders, holiday awareness, and progress analytics.
 
-*Screenshots of the application will be added here soon.*
-
----
-
-## ✨ Features
-
--   **Subject Management:** Add, edit, and delete subjects with custom names and colors.
--   **Attendance Target:** Set a target attendance percentage for each subject.
--   **Class Scheduling:** Define a weekly schedule for each subject, specifying the day and time.
--   **Daily Schedule View:** The home screen provides a clear overview of the day's classes.
--   **Attendance Marking:** Easily mark attendance as "Present" or "Absent" directly from the home screen.
--   **Detailed Statistics:** View overall and subject-specific attendance statistics, including total classes, present/absent counts, and current percentage.
--   **Visual Progress:** A donut chart and progress bars provide a quick visual indication of your attendance status.
--   **Calendar View:** An in-app calendar visually displays your attendance history with color-coded dates for present, absent, or mixed attendance days.
--   **Offline First:** All data is stored locally on the device using a Room database, making the app fully functional without an internet connection.
--   **Class Reminders:** The app includes a notification system to remind users about upcoming classes.
+🚀 Built end-to-end using Android’s modern toolkit with a focus on clean architecture, offline resilience, and great UX.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🌟 Highlights
 
--   **Kotlin:** The entire application is written in 100% Kotlin.
--   **Jetpack Compose:** The UI is built entirely with Jetpack Compose, using Material 3 design components for a modern look and feel.
--   **MVVM Architecture:** The app follows the Model-View-ViewModel architecture pattern to ensure a clean separation of concerns and a scalable codebase.
--   **Room Database:** Used for local, persistent storage of all subjects, schedules, and attendance records.
--   **Coroutines & Flow:** Asynchronous operations and reactive data streams are handled using Kotlin Coroutines and StateFlow.
--   **Android ViewModel:** Manages UI-related data in a lifecycle-conscious way.
--   **Navigation Component:** Handles all in-app navigation between different screens.
+- 🎯 **Target-driven tracking** → Subject-wise goals with progress bars & donut charts.  
+- 🗓️ **Weekly schedules** → Auto-generates class reminders & daily views.  
+- ✅ **One-tap attendance** → From home cards or actionable notifications.  
+- 📅 **Holiday-aware calendar** → Toggle holidays & auto-adjust stats.  
+- 🔕 **Offline-first Room DB** → Works entirely without internet.  
+- ⏰ **Reliable reminders** → Exact alarms + foreground notifications.  
+- ♻️ **Boot-resilient** → Alarms survive reboots & battery optimizations.  
+- ✨ **Modern UX** → Animated indicators, personalized themes, haptics.  
+
+---
+
+## 🛠️ Tech Stack
+
+- **Language**: Kotlin (100%)  
+- **UI**: Jetpack Compose, Material 3, AnimatedVisibility, Donut Chart  
+- **Architecture**: MVVM + ViewModel + StateFlow + Coroutines  
+- **Local Storage**: Room (v2.6.1) + TypeConverters  
+- **Preferences**: DataStore (1.1.1)  
+- **Navigation**: Navigation-Compose (2.7.7)  
+- **Calendar UI**: Kizitonwose Calendar Compose  
+- **Reminders**: AlarmManager + Exact Alarms + Foreground Service  
+- **Notifications**: Notification Channels, Action Buttons, Full-Screen Intents  
+- **Permissions**: Accompanist Permissions (0.34.0)  
+- **Build**: Gradle 8.13, Kotlin 1.9.22, AGP 8.4.1  
+- **Testing**: JUnit4, Espresso, Compose UI Tests  
+
+---
+
+## 🏗️ System Design
+
+- **Data Layer**: Room entities (Subject, ClassSchedule, AttendanceRecord) + DAOs.  
+- **Domain Logic**: Attendance % computation, progress monitoring, holiday overrides.  
+- **Schedules**: Day+time model with auto-status (LIVE, upcoming, completed).  
+- **Reminders**: Weekly exact alarms, rescheduled on boot & app restarts.  
+- **Notifications**: Foreground service with Present/Absent actions.  
+- **Holiday Logic**: One HOLIDAY record per day → clears conflicts automatically.  
+
+---
+
+## 📲 Core Screens
+
+- **Home** → Greeting, today’s schedule, quick mark attendance.  
+- **Calendar** → Present/Absent/Holiday color-coded views.  
+- **Stats** → Donut chart with subject breakdown & goal comparisons.  
+- **Subject Detail** → Subject-specific calendar, manual backfill, edit/delete.  
+
+---
+
+## 🔑 Permissions Used
+
+- `POST_NOTIFICATIONS` → Android 13+ reminders.  
+- `RECEIVE_BOOT_COMPLETED` → Reschedule alarms after reboot.  
+- `SCHEDULE_EXACT_ALARM` → Precise class reminders.  
+- `USE_FULL_SCREEN_INTENT` → High-priority reminders.  
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` → Reliable background delivery.  
+
+---
+
+## 🧑‍💻 Developer Notes
+
+- **Architecture-first design**: MVVM with clean data flow.  
+- **Offline-first**: No internet dependency.  
+- **Performance**: Coroutines + Flows for reactive UI.  
+- **UX polish**: Animations, haptics, and battery-aware notifications.  
 
 ---
 
 ## 🚀 Getting Started
 
-To get a local copy up and running, follow these simple steps.
-
-### Prerequisites
-
--   Android Studio (latest version recommended)
--   An Android device or emulator running API level 26 or higher
-
-### Installation
-
-1.  **Clone the repository:**
-    ```
-    git clone https://github.com/Ankit-git801/Smart-Attendance-App.git
-    ```
-2.  **Open the project in Android Studio:**
-    -   Open Android Studio.
-    -   Click on `File` -> `Open`.
-    -   Navigate to the cloned repository directory and select it.
-3.  **Build the project:**
-    -   Let Android Studio sync the Gradle files.
-    -   Click on `Build` -> `Make Project` to build the application.
-4.  **Run the app:**
-    -   Select your target device (emulator or physical device).
-    -   Click the `Run` button (▶️).
-
----
-
-## 📄 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
+```bash
+git clone https://github.com/Ankit-git801/Smart-Attendance-App.git
