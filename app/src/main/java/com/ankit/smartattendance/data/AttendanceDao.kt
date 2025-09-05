@@ -20,6 +20,9 @@ interface AttendanceDao {
     @Query("SELECT * FROM subjects")
     fun getAllSubjects(): Flow<List<Subject>>
 
+    @Query("SELECT * FROM subjects")
+    suspend fun getAllSubjectsNow(): List<Subject>
+
     @Query("SELECT * FROM subjects WHERE id = :subjectId")
     suspend fun getSubjectById(subjectId: Long): Subject?
 
@@ -51,19 +54,15 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records")
     fun getAllAttendanceRecords(): Flow<List<AttendanceRecord>>
 
-    @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId")
+    @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId ORDER BY date DESC")
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>>
 
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND scheduleId = :scheduleId AND date = :date")
-    suspend fun countClassRecordsForDay(subjectId: Long, scheduleId: Long, date: Long): Int
-
-    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date")
-    suspend fun deleteRecordsForSubjectOnDate(subjectId: Long, date: Long)
-
-    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId IS NOT NULL")
+    // CORRECTED: Check for scheduleId not equal to 0 for regular classes
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId != 0")
     suspend fun deleteRegularRecordForDate(subjectId: Long, date: Long)
 
-    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId IS NULL")
+    // CORRECTED: Check for scheduleId equal to 0 for extra classes
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId = 0")
     suspend fun deleteExtraClassRecordForDate(subjectId: Long, date: Long)
 
     @Query("DELETE FROM attendance_records WHERE date = :date AND type = 'HOLIDAY'")
@@ -74,12 +73,6 @@ interface AttendanceDao {
 
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
-
-    @Query("DELETE FROM attendance_records")
-    suspend fun deleteAllAttendanceRecords()
-
-    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
-    suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
 
     // --- Statistics Queries ---
     @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL')")

@@ -1,31 +1,27 @@
 package com.ankit.smartattendance.data
 
 import androidx.room.Entity
-import androidx.room.ForeignKey
-import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 @Entity(
     tableName = "attendance_records",
-    foreignKeys = [
-        ForeignKey(
-            entity = Subject::class,
-            parentColumns = ["id"],
-            childColumns = ["subjectId"],
-            onDelete = ForeignKey.CASCADE // This is the key change
-        )
-    ]
+    // The composite key is now valid because all columns are non-nullable.
+    primaryKeys = ["subjectId", "date", "scheduleId", "type"],
 )
 data class AttendanceRecord(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
-    val subjectId: Long?,
-    val scheduleId: Long?,
-    val date: Long,
+    val subjectId: Long,
+    val date: Long, // Stored as epoch day
+    // CORRECTED: scheduleId is now a non-nullable Long.
+    // We will use 0L as a sentinel value for extra classes.
+    val scheduleId: Long,
     val isPresent: Boolean,
-    val note: String? = null,
-    val type: RecordType = RecordType.CLASS
+    @ColumnInfo(defaultValue = "CLASS")
+    val type: RecordType = RecordType.CLASS,
+    val note: String? = null
 )
 
 enum class RecordType {
-    CLASS, HOLIDAY, MANUAL
+    CLASS,
+    MANUAL,
+    HOLIDAY
 }

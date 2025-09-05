@@ -10,10 +10,10 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
@@ -28,8 +28,11 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -50,11 +53,17 @@ import com.ankit.smartattendance.viewmodel.AppViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         NotificationHelper.createNotificationChannel(this)
+
         setContent {
             val appViewModel: AppViewModel = viewModel()
             val theme by appViewModel.theme.collectAsState()
@@ -136,8 +145,8 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val hazeState = remember { HazeState() }
 
-    // List of top-level destinations where the bottom bar should be visible
     val topLevelDestinations = listOf(
         BottomNavItem.Home.route,
         BottomNavItem.Calendar.route,
@@ -150,18 +159,39 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
         modifier = Modifier.systemBarsPadding(),
         bottomBar = {
             if (showBottomBar) {
-                BottomNavigationBar(navController = navController)
+                BottomNavigationBar(
+                    navController = navController,
+                    modifier = Modifier.hazeChild(
+                        state = hazeState,
+                        style = MaterialTheme.haze,
+                    )
+                )
             }
-        }
+        },
+        containerColor = Color.Transparent
     ) { innerPadding ->
         AppNavigation(
             navController = navController,
             appViewModel = appViewModel,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .haze(
+                    state = hazeState,
+                    backgroundColor = MaterialTheme.colorScheme.background,
+                )
         )
     }
 }
 
+val MaterialTheme.haze: HazeStyle
+    @Composable
+    get() = HazeStyle(
+        blurRadius = 20.dp,
+        tint = colorScheme.surface.copy(alpha = 0.7f)
+    )
+
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AppNavigation(
     navController: NavHostController,
@@ -172,10 +202,9 @@ fun AppNavigation(
         navController = navController,
         startDestination = BottomNavItem.Home.route,
         modifier = modifier,
-        enterTransition = { fadeIn(animationSpec = tween(350)) },
-        exitTransition = { fadeOut(animationSpec = tween(350)) },
-        popEnterTransition = { fadeIn(animationSpec = tween(350)) },
-        popExitTransition = { fadeOut(animationSpec = tween(350)) }
+        // By removing the enter and exit transitions, we get an instant switch
+        enterTransition = { EnterTransition.None },
+        exitTransition = { ExitTransition.None }
     ) {
         composable(BottomNavItem.Home.route) {
             HomeScreen(navController = navController, appViewModel = appViewModel)
@@ -209,7 +238,7 @@ fun AppNavigation(
 }
 
 @Composable
-fun BottomNavigationBar(navController: NavHostController) {
+fun BottomNavigationBar(navController: NavHostController, modifier: Modifier = Modifier) {
     val items = listOf(
         BottomNavItem.Home,
         BottomNavItem.Calendar,
@@ -219,7 +248,7 @@ fun BottomNavigationBar(navController: NavHostController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    NavigationBar {
+    NavigationBar(modifier = modifier) {
         items.forEach { item ->
             val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
             NavigationBarItem(

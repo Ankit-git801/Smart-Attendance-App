@@ -22,7 +22,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val allSubjects: Flow<List<Subject>> = attendanceDao.getAllSubjects()
     val allAttendanceRecords: Flow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceRecords()
 
-    // OPTIMIZED: This now directly uses the efficient DAO query.
     val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> = attendanceDao.getSubjectsWithAttendance()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -93,18 +92,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun markAttendance(subjectId: Long, scheduleId: Long?, isPresent: Boolean) {
+    fun markAttendance(subjectId: Long, scheduleId: Long, isPresent: Boolean) {
         viewModelScope.launch {
             val today = LocalDate.now().toEpochDay()
-            attendanceDao.deleteRecordsForSubjectOnDate(subjectId, today)
-
             val record = AttendanceRecord(
                 subjectId = subjectId,
                 scheduleId = scheduleId,
                 date = today,
-                isPresent = isPresent
+                isPresent = isPresent,
+                note = "Regular Class",
+                type = RecordType.CLASS
             )
             attendanceDao.insertAttendanceRecord(record)
+        }
+    }
+
+    // CORRECTED: Uses 0L as the sentinel value for extra classes
+    fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
+        viewModelScope.launch {
+            val record = AttendanceRecord(
+                subjectId = subjectId,
+                scheduleId = 0L, // Using 0L to represent an extra class
+                date = LocalDate.now().toEpochDay(),
+                isPresent = isPresent,
+                note = note ?: "Extra Class"
+            )
+            attendanceDao.insertAttendanceRecord(record)
+            hideExtraClassDialog()
         }
     }
 
@@ -116,7 +130,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (isPresent != null) {
                 val newRecord = AttendanceRecord(
                     subjectId = subjectId,
-                    scheduleId = 1L, // Use a non-null placeholder to identify as "regular"
+                    scheduleId = -1L, // Use a non-null placeholder to identify as "regular"
                     date = dateAsLong,
                     isPresent = isPresent,
                     type = RecordType.CLASS
@@ -126,11 +140,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // CORRECTED: Uses 0L as the sentinel value for extra classes
     fun markExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
         viewModelScope.launch {
             val record = AttendanceRecord(
                 subjectId = subjectId,
-                scheduleId = null,
+                scheduleId = 0L, // Using 0L to represent an extra class
                 date = date.toEpochDay(),
                 isPresent = true,
                 note = "Extra Class",
@@ -171,8 +186,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val dateAsLong = date.toEpochDay()
                 attendanceDao.deleteAttendanceRecordsOnDate(dateAsLong)
                 val holidayRecord = AttendanceRecord(
-                    subjectId = null,
-                    scheduleId = null,
+                    subjectId = 0,
+                    scheduleId = -2L, // Special ID for holiday
                     date = dateAsLong,
                     isPresent = false,
                     note = "Holiday",
@@ -188,20 +203,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _showHolidayDialog.value = null
     }
 
-    fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
-        viewModelScope.launch {
-            val record = AttendanceRecord(
-                subjectId = subjectId,
-                scheduleId = null,
-                date = LocalDate.now().toEpochDay(),
-                isPresent = isPresent,
-                note = note ?: "Extra Class"
-            )
-            attendanceDao.insertAttendanceRecord(record)
-            hideExtraClassDialog()
-        }
-    }
-
     fun addManualAttendance(subjectId: Long, presentCount: Int, absentCount: Int) {
         viewModelScope.launch {
             attendanceDao.deleteManualRecordsForSubject(subjectId)
@@ -210,7 +211,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             repeat(presentCount) {
                 manualRecords.add(
                     AttendanceRecord(
-                        subjectId = subjectId, scheduleId = null, date = 0,
+                        subjectId = subjectId, scheduleId = -3L, date = 0,
                         isPresent = true, note = note, type = RecordType.MANUAL
                     )
                 )
@@ -218,7 +219,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             repeat(absentCount) {
                 manualRecords.add(
                     AttendanceRecord(
-                        subjectId = subjectId, scheduleId = null, date = 0,
+                        subjectId = subjectId, scheduleId = -3L, date = 0,
                         isPresent = false, note = note, type = RecordType.MANUAL
                     )
                 )
@@ -248,8 +249,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun calculateBunkAnalysis(subjectId: Long): BunkAnalysis {
         val subject = getSubjectById(subjectId) ?: return BunkAnalysis(0, 0)
-        var attended = getPresentClassesForSubject(subjectId)
-        var total = getTotalClassesForSubject(subjectId)
+        var attended = attendanceDao.getPresentClassesForSubject(subjectId)
+        var total = attendanceDao.getTotalClassesForSubject(subjectId)
         val target = subject.targetAttendance.toDouble()
 
         if (total == 0) {
@@ -322,11 +323,4 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             subjects
         )
     }
-
-    // These individual suspend functions remain for single-use cases like the Bunk Analysis
-    suspend fun getTotalClassesForSubject(subjectId: Long): Int =
-        attendanceDao.getTotalClassesForSubject(subjectId)
-
-    suspend fun getPresentClassesForSubject(subjectId: Long): Int =
-        attendanceDao.getPresentClassesForSubject(subjectId)
 }

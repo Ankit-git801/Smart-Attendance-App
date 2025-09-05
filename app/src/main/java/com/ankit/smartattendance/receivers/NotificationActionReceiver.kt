@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.ankit.smartattendance.data.AppDatabase
 import com.ankit.smartattendance.data.AttendanceRecord
+import com.ankit.smartattendance.data.RecordType
 import com.ankit.smartattendance.services.ReminderService
 import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -30,7 +31,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val subjectId = intent.getLongExtra(EXTRA_SUBJECT_ID, -1L)
                     val isPresent = intent.getBooleanExtra(EXTRA_IS_PRESENT, false)
                     val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
-                    val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, -1L)
+                    // Use 0L as the default sentinel value if the ID is missing.
+                    val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, 0L)
 
                     // Stop the foreground service
                     context.stopService(Intent(context, ReminderService::class.java))
@@ -39,15 +41,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         val dao = AppDatabase.getDatabase(context).attendanceDao()
                         val today = LocalDate.now().toEpochDay()
 
-                        // **FIX**: Delete any previous record for this subject today before inserting a new one.
-                        dao.deleteRecordsForSubjectOnDate(subjectId, today)
+                        // REMOVED: The incorrect deletion call is no longer needed.
+                        // The database now handles updates automatically.
 
+                        // CORRECTED: The record is created with a non-nullable scheduleId.
                         val record = AttendanceRecord(
                             subjectId = subjectId,
-                            scheduleId = if (scheduleId != -1L) scheduleId else null,
+                            scheduleId = scheduleId,
                             date = today,
                             isPresent = isPresent,
-                            note = "Marked from notification"
+                            note = "Marked from notification",
+                            type = RecordType.CLASS
                         )
                         dao.insertAttendanceRecord(record)
 

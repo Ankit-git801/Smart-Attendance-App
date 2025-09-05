@@ -26,10 +26,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.AttendanceRecord
 import com.ankit.smartattendance.data.BunkAnalysis
+import com.ankit.smartattendance.data.RecordType
 import com.ankit.smartattendance.data.Subject
+import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.SuccessGreen
 import com.ankit.smartattendance.viewmodel.AppViewModel
@@ -56,26 +59,25 @@ sealed class AttendanceAction {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewModel: AppViewModel) {
-    val coroutineScope = rememberCoroutineScope()
-    var subject by remember { mutableStateOf<Subject?>(null) }
-    var stats by remember { mutableStateOf(Pair(0.0, 0)) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
     var showMarkAttendanceDialog by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var bunkAnalysis by remember { mutableStateOf<BunkAnalysis?>(null) }
 
+    // OPTIMIZED: Get the specific subject's data directly from the efficient StateFlow
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
+    val subjectWithAttendance by remember(subjectsWithAttendance, subjectId) {
+        derivedStateOf { subjectsWithAttendance.find { it.subject.id == subjectId } }
+    }
+
     val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId)
         .collectAsState(initial = emptyList())
 
-    LaunchedEffect(subjectId, attendanceRecords) {
-        coroutineScope.launch {
-            subject = appViewModel.getSubjectById(subjectId)
-            val total = appViewModel.getTotalClassesForSubject(subjectId)
-            val present = appViewModel.getPresentClassesForSubject(subjectId)
-            val percentage = if (total > 0) (present.toDouble() / total) * 100 else 0.0
-            stats = Pair(percentage, total)
-            bunkAnalysis = appViewModel.calculateBunkAnalysis(subjectId)
+    // This LaunchedEffect now only handles bunk analysis
+    LaunchedEffect(subjectWithAttendance) {
+        subjectWithAttendance?.let {
+            bunkAnalysis = appViewModel.calculateBunkAnalysis(it.subject.id)
         }
     }
 
@@ -83,11 +85,11 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Subject") },
-            text = { Text("Are you sure you want to delete '${subject?.name}'? This action cannot be undone.") },
+            text = { Text("Are you sure you want to delete '${subjectWithAttendance?.subject?.name}'? This action cannot be undone.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        subject?.let { appViewModel.deleteSubject(it) }
+                        subjectWithAttendance?.subject?.let { appViewModel.deleteSubject(it) }
                         navController.popBackStack()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -132,7 +134,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text(subject?.name ?: "Details") },
+            title = { Text(subjectWithAttendance?.subject?.name ?: "Details") },
             navigationIcon = { IconButton({ navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Back") } },
             actions = {
                 IconButton({ showManualAddDialog = true }) { Icon(Icons.Default.Add, "Add Manual Attendance") }
@@ -141,48 +143,80 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             }
         )
     }) { paddingValues ->
-        LazyColumn(
-            Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                subject?.let {
-                    AttendanceProgressCard(
-                        subjectName = it.name,
-                        percentage = stats.first,
-                        target = it.targetAttendance,
-                        color = Color(android.graphics.Color.parseColor(it.color))
+        subjectWithAttendance?.let { swa ->
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    AttendanceProgressCard(subjectWithAttendance = swa)
+                }
+                item {
+                    // NEW: The detailed statistics card
+                    AttendanceStatsCard(subjectWithAttendance = swa)
+                }
+                item {
+                    bunkAnalysis?.let { analysis ->
+                        BunkAnalysisCard(analysis = analysis, subject = swa.subject)
+                    }
+                }
+                item {
+                    Text(
+                        "Attendance Calendar",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                item {
+                    AttendanceCalendar(
+                        records = attendanceRecords,
+                        onDayClick = { date ->
+                            selectedDate = date
+                            showMarkAttendanceDialog = true
+                        }
                     )
                 }
             }
-            item {
-                bunkAnalysis?.let { analysis ->
-                    subject?.let {
-                        BunkAnalysisCard(analysis = analysis, subject = it)
-                    }
-                }
-            }
-            item {
-                Text(
-                    "Attendance Calendar",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-            item {
-                AttendanceCalendar(
-                    records = attendanceRecords,
-                    onDayClick = { date ->
-                        selectedDate = date
-                        showMarkAttendanceDialog = true
-                    }
-                )
+        } ?: run {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
             }
         }
+    }
+}
+
+// NEW: Card to display detailed attendance numbers
+@Composable
+private fun AttendanceStatsCard(subjectWithAttendance: SubjectWithAttendance) {
+    val total = subjectWithAttendance.totalClasses
+    val attended = subjectWithAttendance.presentClasses
+    val missed = total - attended
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StatItem("Total", total.toString())
+            StatItem("Attended", attended.toString(), SuccessGreen)
+            StatItem("Missed", missed.toString(), ErrorRed)
+        }
+    }
+}
+
+@Composable
+private fun StatItem(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = value, style = MaterialTheme.typography.headlineMedium.copy(color = color))
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -195,7 +229,7 @@ fun MarkAttendanceDialog(
 ) {
     val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
     val hasRegularClass = recordsForDay.any { it.scheduleId != null }
-    val hasExtraClass = recordsForDay.any { it.scheduleId == null }
+    val hasExtraClass = recordsForDay.any { it.scheduleId == null && it.type == RecordType.CLASS }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -307,15 +341,18 @@ private fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
 
 
 @Composable
-private fun AttendanceProgressCard(subjectName: String, percentage: Double, target: Int, color: Color) {
+private fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
+    val subject = subjectWithAttendance.subject
+    val percentage = subjectWithAttendance.percentage
+
     Card(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedCircularProgress(percentage = percentage.toFloat(), color = color)
+            AnimatedCircularProgress(percentage = percentage.toFloat(), color = Color(android.graphics.Color.parseColor(subject.color)))
             Spacer(Modifier.width(24.dp))
             Column {
-                Text(subjectName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(subject.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
-                Text("Target: $target%", style = MaterialTheme.typography.titleLarge)
+                Text("Target: ${subject.targetAttendance}%", style = MaterialTheme.typography.titleLarge)
             }
         }
     }
@@ -351,12 +388,13 @@ private fun AttendanceCalendar(records: List<AttendanceRecord>, onDayClick: (Loc
 private fun Day(day: CalendarDay, records: List<AttendanceRecord>, onClick: (CalendarDay) -> Unit) {
     val isToday = day.date == LocalDate.now()
 
-    val wasPresent = records.any { it.isPresent }
-    val wasAbsent = records.any { !it.isPresent }
-    val hasExtraClass = records.any { it.scheduleId == null }
+    val wasPresent = records.any { it.isPresent && it.type != RecordType.HOLIDAY }
+    val wasAbsent = records.any { !it.isPresent && it.type != RecordType.HOLIDAY }
+    val isHoliday = records.any { it.type == RecordType.HOLIDAY }
+    val hasExtraClass = records.any { it.scheduleId == null && it.type == RecordType.CLASS }
 
     val dayBackgroundColor = when {
-        records.isEmpty() -> Color.Transparent
+        isHoliday -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
         wasPresent && wasAbsent -> Color.Gray.copy(alpha = 0.4f)
         wasPresent -> SuccessGreen.copy(alpha = 0.4f)
         wasAbsent -> ErrorRed.copy(alpha = 0.4f)
@@ -422,7 +460,6 @@ private fun DaysOfWeekTitle(daysOfWeek: Array<DayOfWeek>) {
     }
 }
 
-
 @Composable
 fun AnimatedCircularProgress(percentage: Float, color: Color, radius: Dp = 50.dp, strokeWidth: Dp = 8.dp) {
     val animatedPercentage by animateFloatAsState(targetValue = percentage, animationSpec = tween(1000), label = "")
@@ -445,8 +482,7 @@ fun AnimatedCircularProgress(percentage: Float, color: Color, radius: Dp = 50.dp
         }
         Text(
             text = "${animatedPercentage.toInt()}%",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 20.sp, fontWeight = FontWeight.Bold)
         )
     }
 }

@@ -65,6 +65,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
+    // NEW: Haze library for Glassmorphism effect
+    implementation("dev.chrisbanes.haze:haze-jetpack-compose:0.5.4")
+
     // Room Database
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
@@ -78,9 +81,6 @@ dependencies {
 
     // Calendar Library
     implementation("com.kizitonwose.calendar:compose:2.5.1")
-
-    // Confetti Library - REMOVED
-    // implementation("nl.dionsegijn:konfetti-compose:2.0.4")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

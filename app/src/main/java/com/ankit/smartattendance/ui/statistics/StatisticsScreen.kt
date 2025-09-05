@@ -18,10 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.SubjectWithAttendance
@@ -33,12 +35,10 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
-    // OPTIMIZED: This state flow is now the single source of truth.
     val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
-    // This LaunchedEffect now only runs to get the overall stats.
     LaunchedEffect(subjectsWithAttendance) {
         coroutineScope.launch {
             stats = appViewModel.getOverallStatistics()
@@ -78,7 +78,6 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
                     )
                 }
 
-                // OPTIMIZED: The items block now directly uses the efficient data model.
                 items(subjectsWithAttendance, key = { it.subject.id }) { subjectWithAttendance ->
                     SubjectStatCard(
                         navController = navController,
@@ -136,14 +135,23 @@ private fun OverallPerformanceCard(stats: AttendanceStatistics) {
             }
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                StatItem(Icons.Default.Functions, "Total", stats.totalClasses.toString())
                 StatItem(
-                    Icons.Default.CheckCircle,
-                    "Present",
-                    stats.totalPresent.toString(),
-                    SuccessGreen
+                    label = "Total",
+                    value = stats.totalClasses.toString(),
+                    icon = Icons.Default.Functions
                 )
-                StatItem(Icons.Default.Cancel, "Absent", stats.totalAbsent.toString(), ErrorRed)
+                StatItem(
+                    label = "Present",
+                    value = stats.totalPresent.toString(),
+                    color = SuccessGreen,
+                    icon = Icons.Default.CheckCircle
+                )
+                StatItem(
+                    label = "Absent",
+                    value = stats.totalAbsent.toString(),
+                    color = ErrorRed,
+                    icon = Icons.Default.Cancel
+                )
             }
         }
     }
@@ -160,7 +168,6 @@ private fun DonutChart(
         animationSpec = tween(durationMillis = 1000),
         label = "donut_chart_progress"
     )
-
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
         Canvas(modifier = Modifier.size(radius * 2)) {
             val sweepAngle = (animatedPercentage / 100) * 360f
@@ -192,13 +199,15 @@ private fun DonutChart(
 
 @Composable
 private fun StatItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
-    color: Color = MaterialTheme.colorScheme.onSurface
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    icon: ImageVector? = null
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = color)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (icon != null) {
+            Icon(icon, null, tint = color)
+        }
         Text(
             value,
             style = MaterialTheme.typography.titleLarge,
@@ -213,7 +222,6 @@ private fun StatItem(
     }
 }
 
-// OPTIMIZED: This composable now takes the efficient data model.
 @Composable
 private fun SubjectStatCard(
     navController: NavController,
@@ -231,7 +239,10 @@ private fun SubjectStatCard(
             Box(
                 Modifier
                     .size(10.dp)
-                    .background(Color(android.graphics.Color.parseColor(subject.color)), CircleShape)
+                    .background(
+                        Color(android.graphics.Color.parseColor(subject.color)),
+                        CircleShape
+                    )
             )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
@@ -241,13 +252,36 @@ private fun SubjectStatCard(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-            val color = if (percentage >= subject.targetAttendance) SuccessGreen else ErrorRed
             Text(
-                "${"%.1f".format(percentage)}%",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = color
+                text = "${subjectWithAttendance.presentClasses}/${subjectWithAttendance.totalClasses}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 16.dp)
             )
+
+            val color = if (percentage >= subject.targetAttendance) SuccessGreen else ErrorRed
+            Row(
+                modifier = Modifier.width(65.dp), // Fixed width to ensure alignment
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.Bottom // Use Bottom alignment
+            ) {
+                Text(
+                    text = "%.1f".format(percentage),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = color,
+                    modifier = Modifier.alignByBaseline() // Aligns text by its baseline
+                )
+                Text(
+                    text = "%",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = color,
+                    modifier = Modifier
+                        .padding(start = 2.dp)
+                        .alignByBaseline() // Aligns this text by its baseline
+                )
+            }
         }
     }
 }
