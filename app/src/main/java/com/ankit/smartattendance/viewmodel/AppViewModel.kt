@@ -29,7 +29,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-
     val theme: StateFlow<String> = preferencesManager.themeFlow.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -45,7 +44,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _showExtraClassDialog = MutableStateFlow(false)
     val showExtraClassDialog: StateFlow<Boolean> = _showExtraClassDialog.asStateFlow()
 
-    // This is now correctly filtered for holidays
     val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> =
         getTodaysSchedule().stateIn(
             viewModelScope,
@@ -101,11 +99,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun markAttendance(subjectId: Long, scheduleId: Long?, isPresent: Boolean) {
         viewModelScope.launch {
             val today = LocalDate.now().toEpochDay()
-            if (scheduleId != null) {
-                if (attendanceDao.countClassRecordsForDay(subjectId, scheduleId, today) > 0) {
-                    return@launch
-                }
-            }
+            attendanceDao.deleteRecordsForSubjectOnDate(subjectId, today)
+
             val record = AttendanceRecord(
                 subjectId = subjectId,
                 scheduleId = scheduleId,
@@ -119,18 +114,47 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun markAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean?) {
         viewModelScope.launch {
             val dateAsLong = date.toEpochDay()
-            attendanceDao.deleteRecordForDate(subjectId, dateAsLong)
+            // Clear only the regular class record before setting a new one.
+            attendanceDao.deleteRegularRecordForDate(subjectId, dateAsLong)
 
             if (isPresent != null) {
                 val newRecord = AttendanceRecord(
                     subjectId = subjectId,
-                    scheduleId = null,
+                    scheduleId = 1L, // Use a non-null placeholder to identify as "regular"
                     date = dateAsLong,
                     isPresent = isPresent,
                     type = RecordType.CLASS
                 )
                 attendanceDao.insertAttendanceRecord(newRecord)
             }
+        }
+    }
+
+    fun markExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
+        viewModelScope.launch {
+            val record = AttendanceRecord(
+                subjectId = subjectId,
+                scheduleId = null,
+                date = date.toEpochDay(),
+                isPresent = true,
+                note = "Extra Class",
+                type = RecordType.CLASS
+            )
+            attendanceDao.insertAttendanceRecord(record)
+        }
+    }
+
+    // **NEW**: Function to clear only regular class attendance for a date.
+    fun clearRegularAttendanceForDate(subjectId: Long, date: LocalDate) {
+        viewModelScope.launch {
+            attendanceDao.deleteRegularRecordForDate(subjectId, date.toEpochDay())
+        }
+    }
+
+    // **NEW**: Function to clear only extra class attendance for a date.
+    fun clearExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
+        viewModelScope.launch {
+            attendanceDao.deleteExtraClassRecordForDate(subjectId, date.toEpochDay())
         }
     }
 
@@ -227,12 +251,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>> =
         attendanceDao.getAttendanceRecordsForSubject(subjectId)
 
-    /**
-     * THE FIX IS HERE.
-     * This function now combines three sources: the day's schedules, the list of all subjects,
-     * and the list of all attendance records. It then checks if today is a holiday. If it is,
-     * it returns an empty list. Otherwise, it returns the normally scheduled classes.
-     */
     private fun getTodaysSchedule(): Flow<List<ScheduleWithSubject>> {
         val today = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
         val todayEpochDay = LocalDate.now().toEpochDay()
@@ -245,7 +263,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val isTodayHoliday = records.any { it.date == todayEpochDay && it.type == RecordType.HOLIDAY }
 
             if (isTodayHoliday) {
-                emptyList() // If it's a holiday, return an empty list of classes.
+                emptyList()
             } else {
                 schedules.mapNotNull { schedule ->
                     subjects.find { it.id == schedule.subjectId }

@@ -101,25 +101,27 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            Icons.Default.BarChart,
-            null,
-            Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            Icons.Filled.BarChart,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
         Text(
             "No Statistics Yet",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
+        Spacer(Modifier.height(8.dp))
         Text(
-            "Add a subject and mark some attendance to see your stats here.",
+            "Add subjects and mark attendance to see your progress here. Your overall and subject-wise statistics will appear once you have some data.",
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
+
 
 @Composable
 private fun OverallPerformanceCard(stats: AttendanceStatistics) {
@@ -248,4 +250,3 @@ private fun SubjectStatCard(
         }
     }
 }
-

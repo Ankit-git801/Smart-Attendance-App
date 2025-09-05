@@ -56,8 +56,16 @@ interface AttendanceDao {
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND scheduleId = :scheduleId AND date = :date")
     suspend fun countClassRecordsForDay(subjectId: Long, scheduleId: Long, date: Long): Int
 
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date")
+    suspend fun deleteRecordsForSubjectOnDate(subjectId: Long, date: Long)
+
+    // **NEW**: Query to delete only the regular (scheduled) class for a specific day.
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId IS NOT NULL")
+    suspend fun deleteRegularRecordForDate(subjectId: Long, date: Long)
+
+    // **NEW**: Query to delete only extra classes for a specific day.
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId IS NULL")
-    suspend fun deleteRecordForDate(subjectId: Long, date: Long)
+    suspend fun deleteExtraClassRecordForDate(subjectId: Long, date: Long)
 
     @Query("DELETE FROM attendance_records WHERE date = :date AND type = 'HOLIDAY'")
     suspend fun deleteHolidayOnDate(date: Long)
@@ -75,11 +83,11 @@ interface AttendanceDao {
     suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
 
 
-    // --- Statistics Queries (Restored) ---
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE type = 'CLASS'")
+    // --- Statistics Queries ---
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL')")
     suspend fun getTotalClassesOverall(): Int
 
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE type = 'CLASS' AND isPresent = 1")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL') AND isPresent = 1")
     suspend fun getTotalPresentOverall(): Int
 
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND (type = 'CLASS' OR type = 'MANUAL')")

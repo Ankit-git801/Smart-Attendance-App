@@ -39,17 +39,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         val dao = AppDatabase.getDatabase(context).attendanceDao()
                         val today = LocalDate.now().toEpochDay()
 
-                        // Prevent duplicate marking
-                        if (dao.countClassRecordsForDay(subjectId, scheduleId, today) == 0) {
-                            val record = AttendanceRecord(
-                                subjectId = subjectId,
-                                scheduleId = if (scheduleId != -1L) scheduleId else null,
-                                date = today,
-                                isPresent = isPresent,
-                                note = "Marked from notification"
-                            )
-                            dao.insertAttendanceRecord(record)
-                        }
+                        // **FIX**: Delete any previous record for this subject today before inserting a new one.
+                        dao.deleteRecordsForSubjectOnDate(subjectId, today)
+
+                        val record = AttendanceRecord(
+                            subjectId = subjectId,
+                            scheduleId = if (scheduleId != -1L) scheduleId else null,
+                            date = today,
+                            isPresent = isPresent,
+                            note = "Marked from notification"
+                        )
+                        dao.insertAttendanceRecord(record)
 
                         // Update the user with a confirmation notification
                         val subject = dao.getSubjectById(subjectId)
