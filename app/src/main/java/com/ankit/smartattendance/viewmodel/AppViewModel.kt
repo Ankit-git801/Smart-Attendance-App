@@ -92,67 +92,78 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun markAttendance(subjectId: Long, scheduleId: Long, isPresent: Boolean) {
+    // --- REFACTORED ATTENDANCE LOGIC ---
+
+    private fun markAttendance(
+        subjectId: Long,
+        scheduleId: Long,
+        date: LocalDate,
+        type: RecordType,
+        isPresent: Boolean,
+        note: String
+    ) {
         viewModelScope.launch {
-            val today = LocalDate.now().toEpochDay()
             val record = AttendanceRecord(
                 subjectId = subjectId,
                 scheduleId = scheduleId,
-                date = today,
-                isPresent = isPresent,
-                note = "Regular Class",
-                type = RecordType.CLASS
-            )
-            attendanceDao.insertAttendanceRecord(record)
-        }
-    }
-
-    // CORRECTED: Uses 0L as the sentinel value for extra classes
-    fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
-        viewModelScope.launch {
-            val record = AttendanceRecord(
-                subjectId = subjectId,
-                scheduleId = 0L, // Using 0L to represent an extra class
-                date = LocalDate.now().toEpochDay(),
-                isPresent = isPresent,
-                note = note ?: "Extra Class"
-            )
-            attendanceDao.insertAttendanceRecord(record)
-            hideExtraClassDialog()
-        }
-    }
-
-    fun markAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean?) {
-        viewModelScope.launch {
-            val dateAsLong = date.toEpochDay()
-            attendanceDao.deleteRegularRecordForDate(subjectId, dateAsLong)
-
-            if (isPresent != null) {
-                val newRecord = AttendanceRecord(
-                    subjectId = subjectId,
-                    scheduleId = -1L, // Use a non-null placeholder to identify as "regular"
-                    date = dateAsLong,
-                    isPresent = isPresent,
-                    type = RecordType.CLASS
-                )
-                attendanceDao.insertAttendanceRecord(newRecord)
-            }
-        }
-    }
-
-    // CORRECTED: Uses 0L as the sentinel value for extra classes
-    fun markExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
-        viewModelScope.launch {
-            val record = AttendanceRecord(
-                subjectId = subjectId,
-                scheduleId = 0L, // Using 0L to represent an extra class
                 date = date.toEpochDay(),
-                isPresent = true,
-                note = "Extra Class",
-                type = RecordType.CLASS
+                isPresent = isPresent,
+                type = type,
+                note = note
             )
             attendanceDao.insertAttendanceRecord(record)
         }
+    }
+
+    // Called from HomeScreen
+    fun markTodayAsPresent(subjectId: Long, scheduleId: Long) {
+        markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CLASS, true, "Marked from Home")
+    }
+
+    // Called from HomeScreen
+    fun markTodayAsAbsent(subjectId: Long, scheduleId: Long) {
+        markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CLASS, false, "Marked from Home")
+    }
+
+    // Called from HomeScreen
+    fun markTodayAsCancelled(subjectId: Long, scheduleId: Long) {
+        markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CANCELLED, false, "Class Cancelled")
+    }
+
+    // Called from DetailScreen Calendar
+    fun markAsPresentForDate(subjectId: Long, date: LocalDate) {
+        viewModelScope.launch {
+            val scheduleForDay = attendanceDao.getSchedulesForSubject(subjectId).find { it.dayOfWeek == date.dayOfWeek.value + 1 }
+            val scheduleId = scheduleForDay?.id ?: -1L
+            markAttendance(subjectId, scheduleId, date, RecordType.CLASS, true, "Marked from Calendar")
+        }
+    }
+
+    // Called from DetailScreen Calendar
+    fun markAsAbsentForDate(subjectId: Long, date: LocalDate) {
+        viewModelScope.launch {
+            val scheduleForDay = attendanceDao.getSchedulesForSubject(subjectId).find { it.dayOfWeek == date.dayOfWeek.value + 1 }
+            val scheduleId = scheduleForDay?.id ?: -1L
+            markAttendance(subjectId, scheduleId, date, RecordType.CLASS, false, "Marked from Calendar")
+        }
+    }
+
+    // Called from DetailScreen Calendar
+    fun markAsCancelledForDate(subjectId: Long, date: LocalDate) {
+        viewModelScope.launch {
+            val scheduleForDay = attendanceDao.getSchedulesForSubject(subjectId).find { it.dayOfWeek == date.dayOfWeek.value + 1 }
+            val scheduleId = scheduleForDay?.id ?: -1L
+            markAttendance(subjectId, scheduleId, date, RecordType.CANCELLED, false, "Marked from Calendar")
+        }
+    }
+
+    fun markExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
+        markAttendance(subjectId, 0L, date, RecordType.CLASS, true, "Extra Class from Calendar")
+    }
+
+    fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
+        markAttendance(subjectId, 0L, LocalDate.now(), RecordType.CLASS, isPresent, note ?: "Extra Class")
+        hideExtraClassDialog()
     }
 
     fun clearRegularAttendanceForDate(subjectId: Long, date: LocalDate) {
@@ -166,6 +177,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             attendanceDao.deleteExtraClassRecordForDate(subjectId, date.toEpochDay())
         }
     }
+
+    // --- END REFACTORED LOGIC ---
 
     fun onHolidayToggleRequested(date: LocalDate) {
         viewModelScope.launch {
@@ -187,7 +200,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 attendanceDao.deleteAttendanceRecordsOnDate(dateAsLong)
                 val holidayRecord = AttendanceRecord(
                     subjectId = 0,
-                    scheduleId = -2L, // Special ID for holiday
+                    scheduleId = -2L,
                     date = dateAsLong,
                     isPresent = false,
                     note = "Holiday",
@@ -257,7 +270,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             return BunkAnalysis(0, 0)
         }
 
-        val currentPercentage = (attended.toDouble() / total) * 100
+        val currentPercentage = (attended.toDouble() / total) * 100.0
 
         return if (currentPercentage >= target) {
             var bunksAllowed = 0
@@ -283,7 +296,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     break
                 }
                 mustAttend++
-                if (mustAttend > total * 2) break // Safety break to prevent infinite loops
+                if (mustAttend > total * 2) break
             }
             BunkAnalysis(classesToBunk = 0, classesToAttend = mustAttend)
         }

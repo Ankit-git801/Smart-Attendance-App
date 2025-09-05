@@ -5,14 +5,11 @@ import androidx.room.ColumnInfo
 
 @Entity(
     tableName = "attendance_records",
-    // The composite key is now valid because all columns are non-nullable.
-    primaryKeys = ["subjectId", "date", "scheduleId", "type"],
+    primaryKeys = ["subjectId", "date", "scheduleId", "type"]
 )
 data class AttendanceRecord(
     val subjectId: Long,
-    val date: Long, // Stored as epoch day
-    // CORRECTED: scheduleId is now a non-nullable Long.
-    // We will use 0L as a sentinel value for extra classes.
+    val date: Long,
     val scheduleId: Long,
     val isPresent: Boolean,
     @ColumnInfo(defaultValue = "CLASS")
@@ -20,8 +17,10 @@ data class AttendanceRecord(
     val note: String? = null
 )
 
+// THIS IS THE FIX: The CANCELLED type must be defined here.
 enum class RecordType {
     CLASS,
     MANUAL,
-    HOLIDAY
+    HOLIDAY,
+    CANCELLED
 }

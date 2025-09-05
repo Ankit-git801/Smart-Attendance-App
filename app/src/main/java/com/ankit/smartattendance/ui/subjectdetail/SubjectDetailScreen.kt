@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 sealed class AttendanceAction {
     object Present : AttendanceAction()
     object Absent : AttendanceAction()
+    object Cancelled : AttendanceAction()
     object ExtraClass : AttendanceAction()
     object ClearRegular : AttendanceAction()
     object ClearExtra : AttendanceAction()
@@ -65,7 +66,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var bunkAnalysis by remember { mutableStateOf<BunkAnalysis?>(null) }
 
-    // OPTIMIZED: Get the specific subject's data directly from the efficient StateFlow
     val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     val subjectWithAttendance by remember(subjectsWithAttendance, subjectId) {
         derivedStateOf { subjectsWithAttendance.find { it.subject.id == subjectId } }
@@ -74,7 +74,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId)
         .collectAsState(initial = emptyList())
 
-    // This LaunchedEffect now only handles bunk analysis
     LaunchedEffect(subjectWithAttendance) {
         subjectWithAttendance?.let {
             bunkAnalysis = appViewModel.calculateBunkAnalysis(it.subject.id)
@@ -120,8 +119,9 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             onConfirm = { action ->
                 selectedDate?.let { date ->
                     when (action) {
-                        AttendanceAction.Present -> appViewModel.markAttendanceForDate(subjectId, date, true)
-                        AttendanceAction.Absent -> appViewModel.markAttendanceForDate(subjectId, date, false)
+                        AttendanceAction.Present -> appViewModel.markAsPresentForDate(subjectId, date)
+                        AttendanceAction.Absent -> appViewModel.markAsAbsentForDate(subjectId, date)
+                        AttendanceAction.Cancelled -> appViewModel.markAsCancelledForDate(subjectId, date)
                         AttendanceAction.ExtraClass -> appViewModel.markExtraClassAttendanceForDate(subjectId, date)
                         AttendanceAction.ClearRegular -> appViewModel.clearRegularAttendanceForDate(subjectId, date)
                         AttendanceAction.ClearExtra -> appViewModel.clearExtraClassAttendanceForDate(subjectId, date)
@@ -131,7 +131,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             }
         )
     }
-
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(subjectWithAttendance?.subject?.name ?: "Details") },
@@ -156,7 +155,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
                     AttendanceProgressCard(subjectWithAttendance = swa)
                 }
                 item {
-                    // NEW: The detailed statistics card
                     AttendanceStatsCard(subjectWithAttendance = swa)
                 }
                 item {
@@ -190,7 +188,6 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     }
 }
 
-// NEW: Card to display detailed attendance numbers
 @Composable
 private fun AttendanceStatsCard(subjectWithAttendance: SubjectWithAttendance) {
     val total = subjectWithAttendance.totalClasses
@@ -228,8 +225,8 @@ fun MarkAttendanceDialog(
     onConfirm: (AttendanceAction) -> Unit
 ) {
     val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
-    val hasRegularClass = recordsForDay.any { it.scheduleId != null }
-    val hasExtraClass = recordsForDay.any { it.scheduleId == null && it.type == RecordType.CLASS }
+    val hasRegularClass = recordsForDay.any { it.scheduleId != 0L }
+    val hasExtraClass = recordsForDay.any { it.scheduleId == 0L && it.type == RecordType.CLASS }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -241,11 +238,11 @@ fun MarkAttendanceDialog(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
-
                 Text("Regular Class", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Divider(modifier = Modifier.padding(bottom = 8.dp))
                 AttendanceActionRow(Icons.Default.CheckCircle, "Mark Present", onClick = { onConfirm(AttendanceAction.Present) })
                 AttendanceActionRow(Icons.Default.Cancel, "Mark Absent", onClick = { onConfirm(AttendanceAction.Absent) })
+                AttendanceActionRow(Icons.Default.EventBusy, "Mark as Cancelled", onClick = { onConfirm(AttendanceAction.Cancelled) })
                 if (hasRegularClass) {
                     AttendanceActionRow(Icons.Default.DeleteOutline, "Clear Regular", onClick = { onConfirm(AttendanceAction.ClearRegular) }, isDestructive = true)
                 }
@@ -338,8 +335,6 @@ private fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
         }
     }
 }
-
-
 @Composable
 private fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
     val subject = subjectWithAttendance.subject
@@ -391,7 +386,7 @@ private fun Day(day: CalendarDay, records: List<AttendanceRecord>, onClick: (Cal
     val wasPresent = records.any { it.isPresent && it.type != RecordType.HOLIDAY }
     val wasAbsent = records.any { !it.isPresent && it.type != RecordType.HOLIDAY }
     val isHoliday = records.any { it.type == RecordType.HOLIDAY }
-    val hasExtraClass = records.any { it.scheduleId == null && it.type == RecordType.CLASS }
+    val hasExtraClass = records.any { it.scheduleId == 0L && it.type == RecordType.CLASS }
 
     val dayBackgroundColor = when {
         isHoliday -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)

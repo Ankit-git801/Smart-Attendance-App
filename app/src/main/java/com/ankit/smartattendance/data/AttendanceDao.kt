@@ -57,11 +57,9 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId ORDER BY date DESC")
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>>
 
-    // CORRECTED: Check for scheduleId not equal to 0 for regular classes
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId != 0")
     suspend fun deleteRegularRecordForDate(subjectId: Long, date: Long)
 
-    // CORRECTED: Check for scheduleId equal to 0 for extra classes
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId = 0")
     suspend fun deleteExtraClassRecordForDate(subjectId: Long, date: Long)
 
@@ -74,25 +72,24 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
 
-    // --- Statistics Queries ---
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL')")
+    // --- Statistics Queries (Corrected to ignore cancelled classes) ---
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL') AND type != 'CANCELLED'")
     suspend fun getTotalClassesOverall(): Int
 
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL') AND isPresent = 1")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL') AND isPresent = 1 AND type != 'CANCELLED'")
     suspend fun getTotalPresentOverall(): Int
 
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND (type = 'CLASS' OR type = 'MANUAL')")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND (type = 'CLASS' OR type = 'MANUAL') AND type != 'CANCELLED'")
     suspend fun getTotalClassesForSubject(subjectId: Long): Int
 
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL') AND type != 'CANCELLED'")
     suspend fun getPresentClassesForSubject(subjectId: Long): Int
 
-    // --- Combined Queries for Performance ---
     @Query("""
         SELECT 
             s.*,
-            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND (type = 'CLASS' OR type = 'MANUAL')) as totalClasses,
-            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')) as presentClasses
+            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND (type = 'CLASS' OR type = 'MANUAL') AND type != 'CANCELLED') as totalClasses,
+            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL') AND type != 'CANCELLED') as presentClasses
         FROM subjects s
     """)
     fun getSubjectsWithAttendance(): Flow<List<SubjectWithAttendance>>

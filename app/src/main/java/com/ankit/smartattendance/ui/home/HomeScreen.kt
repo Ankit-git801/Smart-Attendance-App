@@ -1,7 +1,7 @@
 package com.ankit.smartattendance.ui.home
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi // <-- THIS IS THE FIX
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -121,7 +121,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             }
         )
     }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -164,11 +163,14 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                         scheduleWithSubject = scheduleWithSubject,
                         appViewModel = appViewModel,
                         onMark = { isPresent ->
-                            appViewModel.markAttendance(
-                                scheduleWithSubject.subject.id,
-                                scheduleWithSubject.schedule.id,
-                                isPresent
-                            )
+                            if (isPresent) {
+                                appViewModel.markTodayAsPresent(scheduleWithSubject.subject.id, scheduleWithSubject.schedule.id)
+                            } else {
+                                appViewModel.markTodayAsAbsent(scheduleWithSubject.subject.id, scheduleWithSubject.schedule.id)
+                            }
+                        },
+                        onCancel = {
+                            appViewModel.markTodayAsCancelled(scheduleWithSubject.subject.id, scheduleWithSubject.schedule.id)
                         },
                         onClick = {
                             navController.navigate("subject_detail/${scheduleWithSubject.subject.id}")
@@ -237,7 +239,6 @@ private fun ExtraClassConfirmationDialog(
 fun GreetingCard(userName: String) {
     val greetingInfo = getGreetingInfo()
     val textColor = if (greetingInfo.greetingText == "Good Night") Color.White.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.8f)
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -369,8 +370,6 @@ private fun QuickActionCard(
         }
     }
 }
-
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExtraClassSubjectDialog(
@@ -455,10 +454,12 @@ fun TodayScheduleCard(
     scheduleWithSubject: ScheduleWithSubject,
     appViewModel: AppViewModel = viewModel(),
     onMark: (Boolean) -> Unit,
+    onCancel: () -> Unit,
     onClick: () -> Unit
 ) {
     val records by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
     var isAlreadyMarked by remember { mutableStateOf(false) }
+    var recordType by remember { mutableStateOf<RecordType?>(null) }
     var wasPresent by remember { mutableStateOf<Boolean?>(null) }
 
     LaunchedEffect(records, scheduleWithSubject.subject.id) {
@@ -466,6 +467,7 @@ fun TodayScheduleCard(
         val recordForToday = records.find { it.subjectId == scheduleWithSubject.subject.id && it.date == todayEpochDay && it.scheduleId == scheduleWithSubject.schedule.id }
         isAlreadyMarked = recordForToday != null
         wasPresent = recordForToday?.isPresent
+        recordType = recordForToday?.type
     }
 
     val subject = scheduleWithSubject.subject
@@ -525,10 +527,11 @@ fun TodayScheduleCard(
                     modifier = Modifier.align(Alignment.End), label = "attendance_buttons"
                 ) { marked ->
                     if (marked) {
+                        val (icon, text, color) = when (recordType) {
+                            RecordType.CANCELLED -> Triple(Icons.Filled.EventBusy, "Class Cancelled", MaterialTheme.colorScheme.onSurfaceVariant)
+                            else -> if (wasPresent == true) Triple(Icons.Filled.CheckCircle, "Marked as Present", SuccessGreen) else Triple(Icons.Filled.Cancel, "Marked as Absent", ErrorRed)
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            val icon = if (wasPresent == true) Icons.Filled.CheckCircle else Icons.Filled.Cancel
-                            val text = if (wasPresent == true) "Marked as Present" else "Marked as Absent"
-                            val color = if (wasPresent == true) SuccessGreen else ErrorRed
                             Icon(icon, contentDescription = null, tint = color)
                             Spacer(Modifier.width(8.dp))
                             Text(
@@ -541,18 +544,26 @@ fun TodayScheduleCard(
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                "Mark as:",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.width(16.dp))
-                            FilledTonalButton(onClick = { onMark(true) }) { Text("Present") }
-                            Spacer(Modifier.width(8.dp))
-                            OutlinedButton(onClick = { onMark(false) }) { Text("Absent") }
+                            FilledTonalButton(onClick = { onMark(true) }) {
+                                Text("Present")
+                            }
+                            OutlinedButton(onClick = { onMark(false) }) {
+                                Text("Absent")
+                            }
+                            IconButton(
+                                onClick = { onCancel() },
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Mark as Cancelled"
+                                )
+                            }
                         }
                     }
                 }
@@ -560,7 +571,6 @@ fun TodayScheduleCard(
         }
     }
 }
-
 @Composable
 private fun LiveBadge() {
     val infiniteTransition = rememberInfiniteTransition(label = "live_badge_transition")
@@ -600,8 +610,6 @@ private fun LiveBadge() {
         )
     }
 }
-
-
 private fun formatTime(hour: Int, minute: Int): String {
     val calendar = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, hour)
