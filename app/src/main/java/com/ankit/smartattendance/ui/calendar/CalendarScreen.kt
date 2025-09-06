@@ -104,8 +104,11 @@ private fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
 
 @Composable
 private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick: (LocalDate) -> Unit) {
+    // THIS IS THE FIX: We filter out MANUAL records to prevent them from being processed as dates.
     val recordsForDay = remember(day, allRecords) {
-        allRecords.filter { it.date != 0L && LocalDate.ofEpochDay(it.date) == day.date }
+        allRecords.filter {
+            it.type != RecordType.MANUAL && it.date > 0 && LocalDate.ofEpochDay(it.date) == day.date
+        }
     }
 
     val isToday = day.date == LocalDate.now()
@@ -128,7 +131,7 @@ private fun Day(day: CalendarDay, allRecords: List<AttendanceRecord>, onDayClick
             .padding(4.dp)
             .clip(CircleShape)
             .background(color = dayBackgroundColor)
-            .border( // Add the border modifier for today's date
+            .border(
                 width = if (isToday) 2.dp else 0.dp,
                 color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
                 shape = CircleShape

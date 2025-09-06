@@ -8,10 +8,12 @@ import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.ScheduleWithSubject
 import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.utils.AlarmScheduler
+import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Calendar
+import java.util.concurrent.atomic.AtomicLong
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -88,13 +90,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val schedules = attendanceDao.getSchedulesForSubject(subject.id)
             AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
-            // THIS IS THE FIX: Delete attendance records before deleting the subject.
-            attendanceDao.deleteAttendanceRecordsForSubject(subject.id)
             attendanceDao.deleteSubject(subject)
         }
     }
 
-    // --- REFACTORED ATTENDANCE LOGIC ---
+    private fun checkAttendanceAndWarn(subjectId: Long) {
+        viewModelScope.launch {
+            val subject = attendanceDao.getSubjectById(subjectId)
+            if (subject != null) {
+                val total = attendanceDao.getTotalClassesForSubject(subjectId)
+                val present = attendanceDao.getPresentClassesForSubject(subjectId)
+                val percentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
+
+                if (percentage < subject.targetAttendance) {
+                    NotificationHelper.showAttendanceWarningNotification(applicationContext, subject, percentage)
+                }
+            }
+        }
+    }
 
     private fun markAttendance(
         subjectId: Long,
@@ -114,25 +127,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 note = note
             )
             attendanceDao.insertAttendanceRecord(record)
+            if (!isPresent) {
+                checkAttendanceAndWarn(subjectId)
+            }
         }
     }
 
-    // Called from HomeScreen
     fun markTodayAsPresent(subjectId: Long, scheduleId: Long) {
         markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CLASS, true, "Marked from Home")
     }
 
-    // Called from HomeScreen
     fun markTodayAsAbsent(subjectId: Long, scheduleId: Long) {
         markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CLASS, false, "Marked from Home")
     }
 
-    // Called from HomeScreen
     fun markTodayAsCancelled(subjectId: Long, scheduleId: Long) {
         markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CANCELLED, false, "Class Cancelled")
     }
 
-    // Called from DetailScreen Calendar
     fun markAsPresentForDate(subjectId: Long, date: LocalDate) {
         viewModelScope.launch {
             val scheduleForDay = attendanceDao.getSchedulesForSubject(subjectId).find { it.dayOfWeek == date.dayOfWeek.value + 1 }
@@ -141,7 +153,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Called from DetailScreen Calendar
     fun markAsAbsentForDate(subjectId: Long, date: LocalDate) {
         viewModelScope.launch {
             val scheduleForDay = attendanceDao.getSchedulesForSubject(subjectId).find { it.dayOfWeek == date.dayOfWeek.value + 1 }
@@ -150,7 +161,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Called from DetailScreen Calendar
     fun markAsCancelledForDate(subjectId: Long, date: LocalDate) {
         viewModelScope.launch {
             val scheduleForDay = attendanceDao.getSchedulesForSubject(subjectId).find { it.dayOfWeek == date.dayOfWeek.value + 1 }
@@ -179,8 +189,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             attendanceDao.deleteExtraClassRecordForDate(subjectId, date.toEpochDay())
         }
     }
-
-    // --- END REFACTORED LOGIC ---
 
     fun onHolidayToggleRequested(date: LocalDate) {
         viewModelScope.launch {
@@ -220,26 +228,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addManualAttendance(subjectId: Long, presentCount: Int, absentCount: Int) {
         viewModelScope.launch {
-            attendanceDao.deleteManualRecordsForSubject(subjectId)
             val manualRecords = mutableListOf<AttendanceRecord>()
             val note = "Manually Added"
+            // THIS IS THE FIX: Use nanoTime to get a unique, non-colliding key for manual records.
+            // Multiplying by -1 ensures it never conflicts with a real date.
+            val dateCounter = AtomicLong(System.nanoTime() * -1)
+
             repeat(presentCount) {
                 manualRecords.add(
                     AttendanceRecord(
-                        subjectId = subjectId, scheduleId = -3L, date = 0,
-                        isPresent = true, note = note, type = RecordType.MANUAL
+                        subjectId = subjectId,
+                        scheduleId = -3L, // Differentiates from regular and extra classes
+                        date = dateCounter.getAndIncrement(), // Unique key
+                        isPresent = true,
+                        note = note,
+                        type = RecordType.MANUAL
                     )
                 )
             }
             repeat(absentCount) {
                 manualRecords.add(
                     AttendanceRecord(
-                        subjectId = subjectId, scheduleId = -3L, date = 0,
-                        isPresent = false, note = note, type = RecordType.MANUAL
+                        subjectId = subjectId,
+                        scheduleId = -3L,
+                        date = dateCounter.getAndIncrement(),
+                        isPresent = false,
+                        note = note,
+                        type = RecordType.MANUAL
                     )
                 )
             }
             manualRecords.forEach { attendanceDao.insertAttendanceRecord(it) }
+            checkAttendanceAndWarn(subjectId)
         }
     }
 
@@ -298,7 +318,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     break
                 }
                 mustAttend++
-                if (mustAttend > total * 2) break
+                if (mustAttend > total * 2) break // Safety break
             }
             BunkAnalysis(classesToBunk = 0, classesToAttend = mustAttend)
         }

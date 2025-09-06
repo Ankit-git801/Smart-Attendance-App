@@ -19,6 +19,7 @@ object NotificationHelper {
 
     private const val CHANNEL_ID = "attendance_channel_v2"
     private const val CHANNEL_NAME = "Attendance Reminders"
+    // THIS IS THE FIX: Added constants for the new warning channel.
     private const val WARNING_CHANNEL_ID = "attendance_warning_channel_v2"
     private const val WARNING_CHANNEL_NAME = "Attendance Warnings"
 
@@ -30,14 +31,17 @@ object NotificationHelper {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply { description = "High-priority reminders for upcoming classes." }
 
+            // THIS IS THE FIX: Create the new channel for low attendance warnings.
             val warningChannel = NotificationChannel(
                 WARNING_CHANNEL_ID,
                 WARNING_CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply { description = "Alerts for low attendance." }
 
+
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(reminderChannel)
+            // THIS IS THE FIX: Register the new channel with the system.
             notificationManager.createNotificationChannel(warningChannel)
         }
     }
@@ -70,7 +74,6 @@ object NotificationHelper {
         }
         val absentPendingIntent = PendingIntent.getBroadcast(context, notificationId * 10 + 2, absentIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-        // THIS IS THE FIX: Create the intent for the Cancelled action.
         val cancelledIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_CANCELLED
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subject.id)
@@ -92,7 +95,6 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setFullScreenIntent(contentPendingIntent, true)
-            // THIS IS THE FIX: We now reference the correct PNG drawables.
             .addAction(R.drawable.ic_action_present, "Present", presentPendingIntent)
             .addAction(R.drawable.ic_action_absent, "Absent", absentPendingIntent)
             .addAction(R.drawable.ic_action_cancelled, "Cancel", cancelledPendingIntent)
@@ -116,14 +118,16 @@ object NotificationHelper {
         notificationManager.notify(notificationId, builder.build())
     }
 
+    // THIS IS THE FIX: The new function to show a warning notification.
     fun showAttendanceWarningNotification(context: Context, subject: Subject, currentPercentage: Double) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // Give the warning notification a unique ID to avoid overwriting other notifications.
         val warningNotificationId = subject.id.toInt() + 10000
         val builder = NotificationCompat.Builder(context, WARNING_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Low Attendance Alert!")
             .setContentText("Your attendance for ${subject.name} is ${"%.1f".format(currentPercentage)}%, which is below your target of ${subject.targetAttendance}%.")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // High priority to make it visible
             .setAutoCancel(true)
 
         notificationManager.notify(warningNotificationId, builder.build())

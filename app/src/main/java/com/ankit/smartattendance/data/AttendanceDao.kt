@@ -57,10 +57,6 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId ORDER BY date DESC")
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>>
 
-    // THIS IS THE FIX: The new method to delete records by subject.
-    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
-    suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
-
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId != 0")
     suspend fun deleteRegularRecordForDate(subjectId: Long, date: Long)
 
@@ -73,6 +69,7 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE date = :date")
     suspend fun deleteAttendanceRecordsOnDate(date: Long)
 
+    // THIS IS THE FIX: A new query to delete all manual records for a subject.
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
 

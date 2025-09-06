@@ -17,7 +17,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_MARK_ATTENDANCE = "com.ankit.smartattendance.ACTION_MARK_ATTENDANCE"
-        const val ACTION_MARK_CANCELLED = "com.ankit.smartattendance.ACTION_MARK_CANCELLED" // New constant
+        const val ACTION_MARK_CANCELLED = "com.ankit.smartattendance.ACTION_MARK_CANCELLED"
         const val EXTRA_SUBJECT_ID = "EXTRA_SUBJECT_ID"
         const val EXTRA_IS_PRESENT = "EXTRA_IS_PRESENT"
         const val EXTRA_NOTIFICATION_ID = "EXTRA_NOTIFICATION_ID"
@@ -25,7 +25,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // THIS IS THE FIX: A when block to handle different actions.
         when (intent.action) {
             ACTION_MARK_ATTENDANCE -> handleMarkAttendance(context, intent)
             ACTION_MARK_CANCELLED -> handleMarkCancelled(context, intent)
@@ -61,6 +60,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         val present = dao.getPresentClassesForSubject(subjectId)
                         val newPercentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
                         NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, newPercentage, notificationId, false)
+
+                        // THIS IS THE FIX: Check if the new percentage is below target and warn the user.
+                        if (newPercentage < subject.targetAttendance) {
+                            NotificationHelper.showAttendanceWarningNotification(context, subject, newPercentage)
+                        }
                     }
                 }
             } finally {
@@ -69,7 +73,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
         }
     }
 
-    // THIS IS THE FIX: The new function to handle the cancel action.
     private fun handleMarkCancelled(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
