@@ -8,12 +8,10 @@ import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.ScheduleWithSubject
 import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.utils.AlarmScheduler
-import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.util.Calendar
-import java.util.concurrent.atomic.AtomicLong
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -90,24 +88,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val schedules = attendanceDao.getSchedulesForSubject(subject.id)
             AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
-            // THIS IS THE FIX: Delete attendance records before deleting the subject.
             attendanceDao.deleteAttendanceRecordsForSubject(subject.id)
             attendanceDao.deleteSubject(subject)
-        }
-    }
-
-    private fun checkAttendanceAndWarn(subjectId: Long) {
-        viewModelScope.launch {
-            val subject = attendanceDao.getSubjectById(subjectId)
-            if (subject != null) {
-                val total = attendanceDao.getTotalClassesForSubject(subjectId)
-                val present = attendanceDao.getPresentClassesForSubject(subjectId)
-                val percentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
-
-                if (percentage < subject.targetAttendance) {
-                    NotificationHelper.showAttendanceWarningNotification(applicationContext, subject, percentage)
-                }
-            }
         }
     }
 
@@ -129,9 +111,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 note = note
             )
             attendanceDao.insertAttendanceRecord(record)
-            if (!isPresent) {
-                checkAttendanceAndWarn(subjectId)
-            }
         }
     }
 
@@ -171,8 +150,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun markExtraClassAttendanceForDate(subjectId: Long, date: LocalDate) {
-        markAttendance(subjectId, 0L, date, RecordType.CLASS, true, "Extra Class from Calendar")
+    fun markExtraClassAttendanceForDate(subjectId: Long, date: LocalDate, isPresent: Boolean) {
+        val note = if (isPresent) "Extra Class (Present)" else "Extra Class (Absent)"
+        markAttendance(subjectId, 0L, date, RecordType.CLASS, isPresent, note)
     }
 
     fun markExtraClassAttendance(subjectId: Long, isPresent: Boolean, note: String?) {
@@ -232,34 +212,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val manualRecords = mutableListOf<AttendanceRecord>()
             val note = "Manually Added"
-            val dateCounter = AtomicLong(System.nanoTime() * -1)
+            var pseudoDate = System.currentTimeMillis() * -1
 
             repeat(presentCount) {
                 manualRecords.add(
                     AttendanceRecord(
                         subjectId = subjectId,
                         scheduleId = -3L,
-                        date = dateCounter.getAndIncrement(),
+                        date = pseudoDate--,
                         isPresent = true,
                         note = note,
                         type = RecordType.MANUAL
                     )
                 )
             }
+
             repeat(absentCount) {
                 manualRecords.add(
                     AttendanceRecord(
                         subjectId = subjectId,
                         scheduleId = -3L,
-                        date = dateCounter.getAndIncrement(),
+                        date = pseudoDate--,
                         isPresent = false,
                         note = note,
                         type = RecordType.MANUAL
                     )
                 )
             }
+
             manualRecords.forEach { attendanceDao.insertAttendanceRecord(it) }
-            checkAttendanceAndWarn(subjectId)
         }
     }
 
@@ -270,8 +251,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val schedules = attendanceDao.getSchedulesForSubject(subject.id)
                 AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
             }
-            // THIS IS THE FIX: Delete all attendance records before deleting all subjects.
-            attendanceDao.deleteAllAttendanceRecords()
             attendanceDao.deleteAllSubjects()
         }
     }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,7 +53,8 @@ sealed class AttendanceAction {
     object Present : AttendanceAction()
     object Absent : AttendanceAction()
     object Cancelled : AttendanceAction()
-    object ExtraClass : AttendanceAction()
+    object ExtraClassPresent : AttendanceAction()
+    object ExtraClassAbsent : AttendanceAction()
     object ClearRegular : AttendanceAction()
     object ClearExtra : AttendanceAction()
 }
@@ -122,7 +124,8 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
                         AttendanceAction.Present -> appViewModel.markAsPresentForDate(subjectId, date)
                         AttendanceAction.Absent -> appViewModel.markAsAbsentForDate(subjectId, date)
                         AttendanceAction.Cancelled -> appViewModel.markAsCancelledForDate(subjectId, date)
-                        AttendanceAction.ExtraClass -> appViewModel.markExtraClassAttendanceForDate(subjectId, date)
+                        AttendanceAction.ExtraClassPresent -> appViewModel.markExtraClassAttendanceForDate(subjectId, date, true)
+                        AttendanceAction.ExtraClassAbsent -> appViewModel.markExtraClassAttendanceForDate(subjectId, date, false)
                         AttendanceAction.ClearRegular -> appViewModel.clearRegularAttendanceForDate(subjectId, date)
                         AttendanceAction.ClearExtra -> appViewModel.clearExtraClassAttendanceForDate(subjectId, date)
                     }
@@ -183,6 +186,25 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
         } ?: run {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
+    val subject = subjectWithAttendance.subject
+    val percentage = subjectWithAttendance.percentage
+
+    Card(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            AnimatedCircularProgress(percentage = percentage.toFloat(), color = Color(android.graphics.Color.parseColor(subject.color)))
+            Spacer(Modifier.width(24.dp))
+            Column {
+                Text(subject.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text("Target: ${subject.targetAttendance}%", style = MaterialTheme.typography.titleLarge)
             }
         }
     }
@@ -251,7 +273,8 @@ fun MarkAttendanceDialog(
 
                 Text("Extra Class", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 Divider(modifier = Modifier.padding(bottom = 8.dp))
-                AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", onClick = { onConfirm(AttendanceAction.ExtraClass) })
+                AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", onClick = { onConfirm(AttendanceAction.ExtraClassPresent) })
+                AttendanceActionRow(Icons.Outlined.RemoveCircleOutline, "Add Extra Class (Absent)", onClick = { onConfirm(AttendanceAction.ExtraClassAbsent) })
                 if (hasExtraClass) {
                     AttendanceActionRow(Icons.Default.DeleteOutline, "Clear Extra Class", onClick = { onConfirm(AttendanceAction.ClearExtra) }, isDestructive = true)
                 }
@@ -289,7 +312,7 @@ private fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present
         title = { Text("Add Past Attendance") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Enter the number of classes held before you started using the app.")
+                Text("Add more past attendance records. These will be added to your existing statistics.")
                 OutlinedTextField(
                     value = presentCount,
                     onValueChange = { presentCount = it.filter { c -> c.isDigit() } },
@@ -332,23 +355,6 @@ private fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
                 else -> "Your attendance is exactly at the target. Attend the next class to be safe!"
             }
             Text(message, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-@Composable
-private fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
-    val subject = subjectWithAttendance.subject
-    val percentage = subjectWithAttendance.percentage
-
-    Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            AnimatedCircularProgress(percentage = percentage.toFloat(), color = Color(android.graphics.Color.parseColor(subject.color)))
-            Spacer(Modifier.width(24.dp))
-            Column {
-                Text(subject.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text("Target: ${subject.targetAttendance}%", style = MaterialTheme.typography.titleLarge)
-            }
         }
     }
 }
@@ -454,6 +460,7 @@ private fun DaysOfWeekTitle(daysOfWeek: Array<DayOfWeek>) {
         }
     }
 }
+
 
 @Composable
 fun AnimatedCircularProgress(percentage: Float, color: Color, radius: Dp = 50.dp, strokeWidth: Dp = 8.dp) {

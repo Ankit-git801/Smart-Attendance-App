@@ -54,14 +54,6 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records")
     fun getAllAttendanceRecords(): Flow<List<AttendanceRecord>>
 
-    // THIS IS THE FIX: New query to delete attendance records for a specific subject.
-    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
-    suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
-
-    // THIS IS THE FIX: New query to delete all attendance records.
-    @Query("DELETE FROM attendance_records")
-    suspend fun deleteAllAttendanceRecords()
-
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId ORDER BY date DESC")
     fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>>
 
@@ -79,6 +71,10 @@ interface AttendanceDao {
 
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND type = 'MANUAL'")
     suspend fun deleteManualRecordsForSubject(subjectId: Long)
+
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
+    suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
+
 
     // --- Statistics Queries (Corrected to ignore cancelled classes) ---
     @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL') AND type != 'CANCELLED'")
