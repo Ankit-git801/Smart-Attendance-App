@@ -88,6 +88,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val schedules = attendanceDao.getSchedulesForSubject(subject.id)
             AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
+            // THIS IS THE FIX: Delete attendance records before deleting the subject.
+            attendanceDao.deleteAttendanceRecordsForSubject(subject.id)
             attendanceDao.deleteSubject(subject)
         }
     }
