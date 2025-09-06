@@ -90,6 +90,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val schedules = attendanceDao.getSchedulesForSubject(subject.id)
             AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
+            // THIS IS THE FIX: Delete attendance records before deleting the subject.
+            attendanceDao.deleteAttendanceRecordsForSubject(subject.id)
             attendanceDao.deleteSubject(subject)
         }
     }
@@ -230,16 +232,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val manualRecords = mutableListOf<AttendanceRecord>()
             val note = "Manually Added"
-            // THIS IS THE FIX: Use nanoTime to get a unique, non-colliding key for manual records.
-            // Multiplying by -1 ensures it never conflicts with a real date.
             val dateCounter = AtomicLong(System.nanoTime() * -1)
 
             repeat(presentCount) {
                 manualRecords.add(
                     AttendanceRecord(
                         subjectId = subjectId,
-                        scheduleId = -3L, // Differentiates from regular and extra classes
-                        date = dateCounter.getAndIncrement(), // Unique key
+                        scheduleId = -3L,
+                        date = dateCounter.getAndIncrement(),
                         isPresent = true,
                         note = note,
                         type = RecordType.MANUAL
@@ -270,6 +270,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val schedules = attendanceDao.getSchedulesForSubject(subject.id)
                 AlarmScheduler.cancelClassAlarms(applicationContext, schedules)
             }
+            // THIS IS THE FIX: Delete all attendance records before deleting all subjects.
+            attendanceDao.deleteAllAttendanceRecords()
             attendanceDao.deleteAllSubjects()
         }
     }
@@ -318,7 +320,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     break
                 }
                 mustAttend++
-                if (mustAttend > total * 2) break // Safety break
+                if (mustAttend > total * 2) break
             }
             BunkAnalysis(classesToBunk = 0, classesToAttend = mustAttend)
         }
