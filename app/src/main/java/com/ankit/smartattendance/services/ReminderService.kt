@@ -19,17 +19,25 @@ class ReminderService : Service() {
             CoroutineScope(Dispatchers.IO).launch {
                 val dao = AppDatabase.getDatabase(applicationContext).attendanceDao()
                 val subject = dao.getSubjectById(subjectId)
-                val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
+                // Using .firstOrNull() for safe access
+                val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
 
                 if (subject != null && schedule != null) {
-                    val notification = NotificationHelper.getAttendanceNotification(
+                    // DEFINITIVE FIX: Calling the new function that returns a Notification object.
+                    val notification = NotificationHelper.buildAttendanceNotification(
                         applicationContext,
                         subject,
                         schedule
                     )
+                    // The service now correctly starts in the foreground with the notification.
                     startForeground(schedule.id.toInt(), notification)
+                } else {
+                    // If subject or schedule is deleted, stop the service.
+                    stopSelf()
                 }
             }
+        } else {
+            stopSelf()
         }
 
         return START_NOT_STICKY

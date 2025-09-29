@@ -1,20 +1,9 @@
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+
 package com.ankit.smartattendance.ui.home
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,10 +12,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Brightness5
-import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,12 +28,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.ankit.smartattendance.data.BunkAnalysis
 import com.ankit.smartattendance.data.RecordType
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.models.ScheduleWithSubject
@@ -74,53 +63,37 @@ private fun getGreetingInfo(): GreetingInfo {
         )
         in 12..16 -> GreetingInfo(
             "Good Afternoon",
-            Icons.Outlined.Brightness5,
+            Icons.Default.WbSunny,
             listOf(Color(0xFF81D4FA), Color(0xFF89CFF0))
         )
-        in 17..20 -> GreetingInfo(
-            "Good Evening",
-            Icons.Outlined.NightsStay,
-            listOf(Color(0xFF7D7AFF), Color(0xFF5356FF))
-        )
         else -> GreetingInfo(
-            "Good Night",
-            Icons.Outlined.NightsStay,
-            listOf(Color(0xFF303158), Color(0xFF232347))
+            "Good Evening",
+            Icons.Default.NightsStay,
+            listOf(Color(0xFF7D7AFF), Color(0xFF5356FF))
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     val todaysSchedule by appViewModel.todaysScheduleWithSubjects.collectAsState()
     val userName by appViewModel.userName.collectAsState()
+    val bunkAnalysisMap by appViewModel.bunkAnalysisMap.collectAsState()
 
-    var showExtraClassConfirmationDialog by remember { mutableStateOf(false) }
-    var showExtraClassSubjectDialog by remember { mutableStateOf(false) }
+    var showExtraClassDialog by remember { mutableStateOf(false) }
 
-    if (showExtraClassConfirmationDialog) {
-        ExtraClassConfirmationDialog(
-            onDismiss = { showExtraClassConfirmationDialog = false },
-            onConfirm = {
-                showExtraClassConfirmationDialog = false
-                showExtraClassSubjectDialog = true
+    if (showExtraClassDialog) {
+        ExtraClassDialog(
+            subjects = subjectsWithAttendance.map { it.subject },
+            onDismiss = { showExtraClassDialog = false },
+            onConfirm = { subjectId, isPresent, count ->
+                appViewModel.addExtraClasses(subjectId, LocalDate.now(), isPresent, count)
+                showExtraClassDialog = false
             }
         )
     }
 
-    if (showExtraClassSubjectDialog) {
-        val allSubjects = subjectsWithAttendance.map { it.subject }
-        ExtraClassSubjectDialog(
-            subjects = allSubjects,
-            onDismiss = { showExtraClassSubjectDialog = false },
-            onConfirm = { subjectId, isPresent ->
-                appViewModel.markExtraClassAttendance(subjectId, isPresent, "Extra Class")
-                showExtraClassSubjectDialog = false
-            }
-        )
-    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -135,7 +108,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 GreetingCard(userName = userName)
                 Spacer(modifier = Modifier.height(24.dp))
                 QuickActions(
-                    onExtraClassClick = { showExtraClassConfirmationDialog = true },
+                    onExtraClassClick = { showExtraClassDialog = true },
                     onNewSubjectClick = { navController.navigate("add_subject") }
                 )
             }
@@ -162,16 +135,6 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                     TodayScheduleCard(
                         scheduleWithSubject = scheduleWithSubject,
                         appViewModel = appViewModel,
-                        onMark = { isPresent ->
-                            if (isPresent) {
-                                appViewModel.markTodayAsPresent(scheduleWithSubject.subject.id, scheduleWithSubject.schedule.id)
-                            } else {
-                                appViewModel.markTodayAsAbsent(scheduleWithSubject.subject.id, scheduleWithSubject.schedule.id)
-                            }
-                        },
-                        onCancel = {
-                            appViewModel.markTodayAsCancelled(scheduleWithSubject.subject.id, scheduleWithSubject.schedule.id)
-                        },
                         onClick = {
                             navController.navigate("subject_detail/${scheduleWithSubject.subject.id}")
                         }
@@ -201,9 +164,14 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 }
             } else {
                 items(subjectsWithAttendance, key = { "subject_${it.subject.id}" }) { subjectWithAttendance ->
-                    SubjectCard(subjectWithAttendance = subjectWithAttendance) {
-                        navController.navigate("subject_detail/${subjectWithAttendance.subject.id}")
-                    }
+                    val bunkAnalysis = bunkAnalysisMap[subjectWithAttendance.subject.id]
+                    SubjectCard(
+                        subjectWithAttendance = subjectWithAttendance,
+                        bunkAnalysis = bunkAnalysis,
+                        onClick = {
+                            navController.navigate("subject_detail/${subjectWithAttendance.subject.id}")
+                        }
+                    )
                 }
             }
         }
@@ -211,20 +179,79 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
 }
 
 @Composable
-private fun ExtraClassConfirmationDialog(
+private fun ExtraClassDialog(
+    subjects: List<Subject>,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: (subjectId: Long, isPresent: Boolean, count: Int) -> Unit
 ) {
-    val formattedDate = remember {
-        SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date())
-    }
+    var selectedSubjectId by remember { mutableStateOf(subjects.firstOrNull()?.id) }
+    var expanded by remember { mutableStateOf(false) }
+    var classCount by remember { mutableStateOf("1") }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Confirm Extra Class", fontFamily = PoppinsFamily) },
-        text = { Text("Do you want to mark an extra class for today, $formattedDate?", fontFamily = PoppinsFamily) },
+        title = { Text("Add Extra Classes", fontFamily = PoppinsFamily) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (subjects.isNotEmpty()) {
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }
+                    ) {
+                        OutlinedTextField(
+                            value = subjects.find { it.id == selectedSubjectId }?.name ?: "Select Subject",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier.menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            subjects.forEach { subject ->
+                                DropdownMenuItem(
+                                    text = { Text(subject.name) },
+                                    onClick = {
+                                        selectedSubjectId = subject.id
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = classCount,
+                        onValueChange = { if (it.all { char -> char.isDigit() }) classCount = it },
+                        label = { Text("Number of Classes") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                } else {
+                    Text("Please add a subject first.")
+                }
+            }
+        },
         confirmButton = {
-            Button(onClick = onConfirm) {
-                Text("Confirm")
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        selectedSubjectId?.let { onConfirm(it, true, classCount.toIntOrNull() ?: 1) }
+                    },
+                    enabled = selectedSubjectId != null && (classCount.toIntOrNull() ?: 0) > 0
+                ) {
+                    Text("Present")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        selectedSubjectId?.let { onConfirm(it, false, classCount.toIntOrNull() ?: 0) }
+                    },
+                    enabled = selectedSubjectId != null && (classCount.toIntOrNull() ?: 0) > 0,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Absent")
+                }
             }
         },
         dismissButton = {
@@ -238,7 +265,7 @@ private fun ExtraClassConfirmationDialog(
 @Composable
 fun GreetingCard(userName: String) {
     val greetingInfo = getGreetingInfo()
-    val textColor = if (greetingInfo.greetingText == "Good Night") Color.White.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.8f)
+    val textColor = if (greetingInfo.greetingText == "Good Evening") Color.White.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.8f)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -260,7 +287,7 @@ fun GreetingCard(userName: String) {
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
-                    text = "${greetingInfo.greetingText}, $userName",
+                    text = "${greetingInfo.greetingText}, $userName!",
                     style = MaterialTheme.typography.headlineSmall.copy(color = textColor)
                 )
                 Text(
@@ -271,7 +298,6 @@ fun GreetingCard(userName: String) {
         }
     }
 }
-
 
 @Composable
 private fun EmptyState(
@@ -370,104 +396,25 @@ private fun QuickActionCard(
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ExtraClassSubjectDialog(
-    subjects: List<Subject>,
-    onDismiss: () -> Unit,
-    onConfirm: (subjectId: Long, isPresent: Boolean) -> Unit
-) {
-    var selectedSubjectId by remember { mutableStateOf(subjects.firstOrNull()?.id) }
-    var expanded by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Subject", fontFamily = PoppinsFamily) },
-        text = {
-            Column {
-                if (subjects.isNotEmpty()) {
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded }
-                    ) {
-                        OutlinedTextField(
-                            value = subjects.find { it.id == selectedSubjectId }?.name
-                                ?: "Select Subject",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier.menuAnchor()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            subjects.forEach { subject ->
-                                DropdownMenuItem(
-                                    text = { Text(subject.name) },
-                                    onClick = {
-                                        selectedSubjectId = subject.id
-                                        expanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    Text("Please add a subject first.")
-                }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = {
-                        selectedSubjectId?.let { onConfirm(it, true) }
-                    },
-                    enabled = selectedSubjectId != null
-                ) {
-                    Text("Present")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        selectedSubjectId?.let { onConfirm(it, false) }
-                    },
-                    enabled = selectedSubjectId != null,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Absent")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun TodayScheduleCard(
     scheduleWithSubject: ScheduleWithSubject,
-    appViewModel: AppViewModel = viewModel(),
-    onMark: (Boolean) -> Unit,
-    onCancel: () -> Unit,
+    appViewModel: AppViewModel,
     onClick: () -> Unit
 ) {
-    val records by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
+    val allRecords by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
     var isAlreadyMarked by remember { mutableStateOf(false) }
     var recordType by remember { mutableStateOf<RecordType?>(null) }
     var wasPresent by remember { mutableStateOf<Boolean?>(null) }
 
-    LaunchedEffect(records, scheduleWithSubject.subject.id) {
-        val todayEpochDay = LocalDate.now().toEpochDay()
-        val recordForToday = records.find { it.subjectId == scheduleWithSubject.subject.id && it.date == todayEpochDay && it.scheduleId == scheduleWithSubject.schedule.id }
-        isAlreadyMarked = recordForToday != null
-        wasPresent = recordForToday?.isPresent
-        recordType = recordForToday?.type
+    LaunchedEffect(allRecords, scheduleWithSubject) {
+        val record = allRecords.find {
+            it.scheduleId == scheduleWithSubject.schedule.id && it.date == LocalDate.now().toEpochDay()
+        }
+        isAlreadyMarked = record != null
+        wasPresent = record?.isPresent
+        recordType = record?.type
     }
 
     val subject = scheduleWithSubject.subject
@@ -484,85 +431,98 @@ fun TodayScheduleCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = MaterialTheme.shapes.large
     ) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-            Box(
-                modifier = Modifier
-                    .width(8.dp)
-                    .fillMaxHeight()
-                    .background(subjectColor)
-            )
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+        Column {
+            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                Box(
+                    modifier = Modifier
+                        .width(8.dp)
+                        .fillMaxHeight()
+                        .background(subjectColor)
+                )
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = subject.name,
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                        Text(
-                            text = "$startTime - $endTime",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (isLive && !isAlreadyMarked) {
-                        LiveBadge()
-                    }
-                }
-
-                AnimatedContent(
-                    targetState = isAlreadyMarked,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(300)) togetherWith
-                                fadeOut(animationSpec = tween(300)) using
-                                SizeTransform(clip = false)
-                    },
-                    modifier = Modifier.align(Alignment.End), label = "attendance_buttons"
-                ) { marked ->
-                    if (marked) {
-                        val (icon, text, color) = when (recordType) {
-                            RecordType.CANCELLED -> Triple(Icons.Filled.EventBusy, "Class Cancelled", MaterialTheme.colorScheme.onSurfaceVariant)
-                            else -> if (wasPresent == true) Triple(Icons.Filled.CheckCircle, "Marked as Present", SuccessGreen) else Triple(Icons.Filled.Cancel, "Marked as Absent", ErrorRed)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(icon, contentDescription = null, tint = color)
-                            Spacer(Modifier.width(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = text,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = color,
-                                fontWeight = FontWeight.Bold
+                                text = subject.name,
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                            Text(
+                                text = "$startTime - $endTime",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                    } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            FilledTonalButton(onClick = { onMark(true) }) {
-                                Text("Present")
+                        if (isLive && !isAlreadyMarked) {
+                            LiveBadge()
+                        }
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(300)) + expandVertically(),
+                exit = fadeOut(animationSpec = tween(300)) + shrinkVertically()
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AnimatedContent(
+                        targetState = isAlreadyMarked,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(300)) togetherWith
+                                    fadeOut(animationSpec = tween(300)) using
+                                    SizeTransform(clip = false)
+                        },
+                        modifier = Modifier.fillMaxWidth(), label = "attendance_buttons"
+                    ) { marked ->
+                        if (marked) {
+                            val (icon, text, color) = when (recordType) {
+                                RecordType.CANCELLED -> Triple(Icons.Filled.EventBusy, "Class Cancelled", MaterialTheme.colorScheme.onSurfaceVariant)
+                                else -> if (wasPresent == true) Triple(Icons.Filled.CheckCircle, "Marked as Present", SuccessGreen) else Triple(Icons.Filled.Cancel, "Marked as Absent", ErrorRed)
                             }
-                            OutlinedButton(onClick = { onMark(false) }) {
-                                Text("Absent")
-                            }
-                            IconButton(
-                                onClick = { onCancel() },
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(icon, contentDescription = null, tint = color)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = text,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = color,
+                                    fontWeight = FontWeight.Bold
                                 )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Mark as Cancelled"
-                                )
+                                FilledTonalButton(onClick = { appViewModel.markTodayAsPresent(subject.id, schedule.id) }) {
+                                    Text("Present")
+                                }
+                                OutlinedButton(onClick = { appViewModel.markTodayAsAbsent(subject.id, schedule.id) }) {
+                                    Text("Absent")
+                                }
+                                IconButton(
+                                    onClick = { appViewModel.markTodayAsCancelled(subject.id, schedule.id) },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    )
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Mark as Cancelled"
+                                    )
+                                }
                             }
                         }
                     }
@@ -571,6 +531,7 @@ fun TodayScheduleCard(
         }
     }
 }
+
 @Composable
 private fun LiveBadge() {
     val infiniteTransition = rememberInfiniteTransition(label = "live_badge_transition")
@@ -610,6 +571,7 @@ private fun LiveBadge() {
         )
     }
 }
+
 private fun formatTime(hour: Int, minute: Int): String {
     val calendar = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, hour)
@@ -619,7 +581,7 @@ private fun formatTime(hour: Int, minute: Int): String {
 }
 
 @Composable
-fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, onClick: () -> Unit) {
+fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, bunkAnalysis: BunkAnalysis?, onClick: () -> Unit) {
     val subject = subjectWithAttendance.subject
     val percentage = subjectWithAttendance.percentage
     val subjectColor = Color(android.graphics.Color.parseColor(subject.color))
@@ -651,6 +613,9 @@ fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, onClick: () -> Uni
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp)
                 )
+                bunkAnalysis?.let {
+                    BunkAnalysisText(it)
+                }
             }
 
             val animatedPercentage by animateFloatAsState(
@@ -667,6 +632,28 @@ fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, onClick: () -> Uni
             )
         }
     }
+}
+
+@Composable
+private fun BunkAnalysisText(analysis: BunkAnalysis) {
+    val text = when {
+        analysis.classesToAttend > 0 -> "Attend next ${analysis.classesToAttend} classes"
+        analysis.classesToBunk > 0 -> "You can bunk next ${analysis.classesToBunk} classes"
+        else -> "Attendance is on track"
+    }
+    val color = when {
+        analysis.classesToAttend > 0 -> MaterialTheme.colorScheme.error
+        analysis.classesToBunk > 0 -> SuccessGreen
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        modifier = Modifier.padding(top = 4.dp)
+    )
 }
 
 @Composable

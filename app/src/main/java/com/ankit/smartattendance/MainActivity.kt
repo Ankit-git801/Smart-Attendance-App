@@ -1,6 +1,7 @@
 package com.ankit.smartattendance
 
 import android.Manifest
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,8 +11,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -37,17 +38,19 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.ankit.smartattendance.ui.addsubject.AddSubjectScreen
 import com.ankit.smartattendance.ui.calendar.CalendarScreen
 import com.ankit.smartattendance.ui.home.HomeScreen
 import com.ankit.smartattendance.ui.settings.SettingsScreen
 import com.ankit.smartattendance.ui.statistics.StatisticsScreen
-import com.ankit.smartattendance.ui.subjectdetail.SubjectDetailScreen
 import com.ankit.smartattendance.ui.theme.SmartAttendanceTheme
+import com.ankit.smartattendance.ui.weeklysched.WeeklyScheduleScreen
 import com.ankit.smartattendance.utils.NotificationHelper
 import com.ankit.smartattendance.viewmodel.AppViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -57,6 +60,8 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
+// DEFINITIVE FIX: Adding the missing import statement.
+import com.ankit.smartattendance.ui.subjectdetail.SubjectDetailScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,7 +78,7 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
             SmartAttendanceTheme(darkTheme = useDarkTheme) {
-                RequestPermissions()
+                RequestAllPermissions()
                 SmartAttendanceApp(appViewModel = appViewModel)
             }
         }
@@ -81,17 +86,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun RequestPermissions() {
+fun RequestAllPermissions() {
     RequestNotificationPermission()
     RequestBatteryOptimizationPermission()
+    RequestExactAlarmPermission()
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun RequestNotificationPermission() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionState =
-            rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS)
+        val permissionState = rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS)
         LaunchedEffect(Unit) {
             if (!permissionState.status.isGranted) {
                 permissionState.launchPermissionRequest()
@@ -116,29 +121,54 @@ fun RequestBatteryOptimizationPermission() {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("Battery Optimization") },
-            text = { Text("To ensure that attendance reminders work correctly, please allow the app to run in the background without battery restrictions.") },
+            text = { Text("To ensure reminders work correctly, please allow the app to run in the background without battery restrictions.") },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showDialog = false
-                        val intent = Intent().apply {
-                            action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
+                Button(onClick = {
+                    showDialog = false
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:${context.packageName}")
                     }
-                ) {
-                    Text("Allow")
-                }
+                    context.startActivity(intent)
+                }) { Text("Allow") }
             },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissButton = { TextButton({ showDialog = false }) { Text("Cancel") } }
         )
     }
 }
+
+@Composable
+fun RequestExactAlarmPermission() {
+    val context = LocalContext.current
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        if (!alarmManager.canScheduleExactAlarms()) {
+            LaunchedEffect(Unit) {
+                showDialog = true
+            }
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Permission Required") },
+            text = { Text("This app needs permission to set precise alarms to send you class reminders on time. Please enable the 'Alarms & reminders' permission for this app in the settings.") },
+            confirmButton = {
+                Button(onClick = {
+                    showDialog = false
+                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        context.startActivity(this)
+                    }
+                }) { Text("Open Settings") }
+            },
+            dismissButton = { TextButton({ showDialog = false }) { Text("Cancel") } }
+        )
+    }
+}
+
 
 @Composable
 fun SmartAttendanceApp(appViewModel: AppViewModel) {
@@ -191,7 +221,6 @@ val MaterialTheme.haze: HazeStyle
         tint = colorScheme.surface.copy(alpha = 0.7f)
     )
 
-@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AppNavigation(
     navController: NavHostController,
@@ -202,7 +231,6 @@ fun AppNavigation(
         navController = navController,
         startDestination = BottomNavItem.Home.route,
         modifier = modifier,
-        // By removing the enter and exit transitions, we get an instant switch
         enterTransition = { EnterTransition.None },
         exitTransition = { ExitTransition.None }
     ) {
@@ -210,29 +238,37 @@ fun AppNavigation(
             HomeScreen(navController = navController, appViewModel = appViewModel)
         }
         composable(BottomNavItem.Calendar.route) {
-            CalendarScreen(appViewModel = appViewModel)
+            CalendarScreen(navController = navController, appViewModel = appViewModel)
         }
         composable(BottomNavItem.Statistics.route) {
             StatisticsScreen(navController = navController, appViewModel = appViewModel)
         }
         composable(BottomNavItem.Settings.route) {
-            SettingsScreen(appViewModel = appViewModel)
+            SettingsScreen(navController = navController, appViewModel = appViewModel)
         }
         composable("add_subject") {
             AddSubjectScreen(navController = navController, appViewModel = appViewModel)
         }
-        composable("edit_subject/{subjectId}") { backStackEntry ->
-            val subjectId = backStackEntry.arguments?.getString("subjectId")?.toLongOrNull() ?: 0L
+        composable(
+            route = "edit_subject/{subjectId}",
+            arguments = listOf(navArgument("subjectId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val subjectId = backStackEntry.arguments?.getLong("subjectId") ?: 0L
             AddSubjectScreen(
                 navController = navController,
                 subjectId = subjectId,
                 appViewModel = appViewModel
             )
         }
-        composable("subject_detail/{subjectId}") { backStackEntry ->
-            val subjectId = backStackEntry.arguments?.getString("subjectId")
-            requireNotNull(subjectId) { "Subject ID is required" }
-            SubjectDetailScreen(subjectId.toLong(), navController, appViewModel)
+        composable(
+            route = "subject_detail/{subjectId}",
+            arguments = listOf(navArgument("subjectId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val subjectId = backStackEntry.arguments?.getLong("subjectId") ?: 0L
+            SubjectDetailScreen(subjectId, navController, appViewModel)
+        }
+        composable("weekly_schedule") {
+            WeeklyScheduleScreen(navController = navController, appViewModel = appViewModel)
         }
     }
 }

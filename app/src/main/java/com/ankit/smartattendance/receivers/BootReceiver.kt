@@ -26,7 +26,10 @@ class BootReceiver : BroadcastReceiver() {
                 for (subject in allSubjects) {
                     val schedules = dao.getSchedulesForSubject(subject.id)
                     if (schedules.isNotEmpty()) {
-                        AlarmScheduler.scheduleClassAlarms(context, subject, schedules)
+                        // DEFINITIVE FIX: Loop through each schedule and set a precise alarm.
+                        schedules.forEach { schedule ->
+                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                        }
                     }
                 }
             }

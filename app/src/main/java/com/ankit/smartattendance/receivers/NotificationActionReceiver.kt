@@ -6,7 +6,7 @@ import android.content.Intent
 import com.ankit.smartattendance.data.AppDatabase
 import com.ankit.smartattendance.data.AttendanceRecord
 import com.ankit.smartattendance.data.RecordType
-import com.ankit.smartattendance.services.ReminderService
+import com.ankit.smartattendance.utils.AlarmScheduler
 import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +40,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
                 val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, 0L)
 
-                context.stopService(Intent(context, ReminderService::class.java))
-
                 if (subjectId != -1L) {
                     val dao = AppDatabase.getDatabase(context).attendanceDao()
                     val record = AttendanceRecord(
@@ -55,15 +53,22 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     dao.insertAttendanceRecord(record)
 
                     val subject = dao.getSubjectById(subjectId)
+                    val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
+
                     if (subject != null) {
                         val total = dao.getTotalClassesForSubject(subjectId)
                         val present = dao.getPresentClassesForSubject(subjectId)
                         val newPercentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
+
                         NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, newPercentage, notificationId, false)
 
-                        // THIS IS THE FIX: Check if the new percentage is below target and warn the user.
-                        if (newPercentage < subject.targetAttendance) {
+                        if (newPercentage < subject.targetAttendance && total > 0) {
                             NotificationHelper.showAttendanceWarningNotification(context, subject, newPercentage)
+                        }
+
+                        // DEFINITIVE FIX: Reschedule the alarm for the next week after this one is handled.
+                        if (schedule != null) {
+                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
                         }
                     }
                 }
@@ -81,8 +86,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, 0L)
                 val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
 
-                context.stopService(Intent(context, ReminderService::class.java))
-
                 if (subjectId != -1L) {
                     val dao = AppDatabase.getDatabase(context).attendanceDao()
                     val record = AttendanceRecord(
@@ -96,8 +99,15 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     dao.insertAttendanceRecord(record)
 
                     val subject = dao.getSubjectById(subjectId)
+                    val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
+
                     if (subject != null) {
                         NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, 0.0, notificationId, true)
+
+                        // DEFINITIVE FIX: Reschedule the alarm for the next week even if cancelled.
+                        if (schedule != null) {
+                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                        }
                     }
                 }
             } finally {
