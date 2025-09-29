@@ -4,12 +4,17 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.ankit.smartattendance.data.ClassSchedule
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.receivers.AlarmReceiver
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 object AlarmScheduler {
+    private const val TAG = "AlarmScheduler"
 
     fun scheduleClassAlarm(context: Context, subject: Subject, schedule: ClassSchedule) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -27,25 +32,31 @@ object AlarmScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val calendar = Calendar.getInstance().apply {
+        // DEFINITIVE FIX: Using the class END TIME (endHour, endMinute) to set the alarm.
+        val alarmTime = Calendar.getInstance().apply {
             set(Calendar.DAY_OF_WEEK, schedule.dayOfWeek)
-            set(Calendar.HOUR_OF_DAY, schedule.startHour)
-            set(Calendar.MINUTE, schedule.startMinute)
+            // Use the end hour and minute for the alarm trigger.
+            set(Calendar.HOUR_OF_DAY, schedule.endHour)
+            set(Calendar.MINUTE, schedule.endMinute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-
-            // If the time has already passed for today, schedule it for the same day next week.
-            if (this.timeInMillis <= System.currentTimeMillis()) {
-                this.add(Calendar.WEEK_OF_YEAR, 1)
-            }
         }
 
-        // DEFINITIVE FIX: Using setAlarmClock for maximum reliability.
-        // This method is designed for user-facing alarms and is less likely to be suppressed by the system.
-        // The first parameter is an AlarmClockInfo object which tells the system this is an important alarm.
-        // The second null parameter is an optional intent to show when the user clicks the clock icon in the status bar.
-        val alarmClockInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, null)
-        alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+        // If the calculated end time for today has already passed, schedule it for the same day next week.
+        if (alarmTime.timeInMillis <= System.currentTimeMillis()) {
+            alarmTime.add(Calendar.DATE, 7)
+        }
+
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        Log.d(TAG, "Scheduling alarm for ${subject.name} to trigger at: ${dateFormat.format(Date(alarmTime.timeInMillis))}")
+
+        try {
+            val clockInfo = AlarmManager.AlarmClockInfo(alarmTime.timeInMillis, null)
+            alarmManager.setAlarmClock(clockInfo, pendingIntent)
+            Log.d(TAG, "Alarm successfully scheduled using setAlarmClock.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error scheduling alarm: ${e.message}")
+        }
     }
 
     fun cancelClassAlarm(context: Context, schedule: ClassSchedule) {
@@ -59,6 +70,7 @@ object AlarmScheduler {
         )
         if (pendingIntent != null) {
             alarmManager.cancel(pendingIntent)
+            Log.d(TAG, "Canceled alarm for schedule ID: ${schedule.id}")
         }
     }
 }

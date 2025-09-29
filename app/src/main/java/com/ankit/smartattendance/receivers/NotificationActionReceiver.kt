@@ -3,6 +3,7 @@ package com.ankit.smartattendance.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.ankit.smartattendance.data.AppDatabase
 import com.ankit.smartattendance.data.AttendanceRecord
 import com.ankit.smartattendance.data.RecordType
@@ -60,13 +61,14 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         val present = dao.getPresentClassesForSubject(subjectId)
                         val newPercentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
 
+                        // This will now resolve correctly.
                         NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, newPercentage, notificationId, false)
 
                         if (newPercentage < subject.targetAttendance && total > 0) {
+                            // This will now resolve correctly.
                             NotificationHelper.showAttendanceWarningNotification(context, subject, newPercentage)
                         }
 
-                        // DEFINITIVE FIX: Reschedule the alarm for the next week after this one is handled.
                         if (schedule != null) {
                             AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
                         }
@@ -102,9 +104,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
 
                     if (subject != null) {
+                        // This will now resolve correctly.
                         NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, 0.0, notificationId, true)
 
-                        // DEFINITIVE FIX: Reschedule the alarm for the next week even if cancelled.
                         if (schedule != null) {
                             AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
                         }
