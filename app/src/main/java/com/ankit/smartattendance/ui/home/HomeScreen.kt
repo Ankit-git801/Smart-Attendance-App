@@ -43,6 +43,7 @@ import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.PoppinsFamily
 import com.ankit.smartattendance.ui.theme.SuccessGreen
 import com.ankit.smartattendance.viewmodel.AppViewModel
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.util.*
@@ -53,23 +54,29 @@ private data class GreetingInfo(
     val gradientColors: List<Color>
 )
 
+// DEFINITIVE FIX: Updated with new color schemes and time slots.
 private fun getGreetingInfo(): GreetingInfo {
     val calendar = Calendar.getInstance()
     return when (calendar.get(Calendar.HOUR_OF_DAY)) {
         in 5..11 -> GreetingInfo(
             "Good Morning",
             Icons.Outlined.WbSunny,
-            listOf(Color(0xFFFBE9A7), Color(0xFFFAD9A3))
+            listOf(Color(0xFF87CEEB), Color(0xFFB0E0E6)) // Morning Sky Blue
         )
         in 12..16 -> GreetingInfo(
             "Good Afternoon",
             Icons.Default.WbSunny,
-            listOf(Color(0xFF81D4FA), Color(0xFF89CFF0))
+            listOf(Color(0xFFFFD580), Color(0xFFFFA500)) // Bright Afternoon Orange
+        )
+        in 17..20 -> GreetingInfo(
+            "Good Evening",
+            Icons.Default.Brightness4,
+            listOf(Color(0xFF87CEEB), Color(0xFFFF5722)) // Evening Red
         )
         else -> GreetingInfo(
-            "Good Evening",
+            "Good Night",
             Icons.Default.NightsStay,
-            listOf(Color(0xFF7D7AFF), Color(0xFF5356FF))
+            listOf(Color(0xFF1A237E), Color(0xFF283593)) // Deep Night Blue
         )
     }
 }
@@ -264,8 +271,18 @@ private fun ExtraClassDialog(
 
 @Composable
 fun GreetingCard(userName: String) {
-    val greetingInfo = getGreetingInfo()
-    val textColor = if (greetingInfo.greetingText == "Good Evening") Color.White.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.8f)
+    var greetingInfo by remember { mutableStateOf(getGreetingInfo()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            greetingInfo = getGreetingInfo()
+            delay(60000) // 1 minute
+        }
+    }
+
+    // DEFINITIVE FIX: Text color now dynamically changes to contrast with the background.
+    val textColor = if (greetingInfo.greetingText == "Good Evening" || greetingInfo.greetingText == "Good Night") Color.White.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.8f)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()

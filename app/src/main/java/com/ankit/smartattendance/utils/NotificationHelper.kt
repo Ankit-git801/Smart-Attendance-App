@@ -10,9 +10,11 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.ankit.smartattendance.MainActivity
+import com.ankit.smartattendance.R // Import your app's R file
 import com.ankit.smartattendance.data.ClassSchedule
 import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.receivers.NotificationActionReceiver
+import com.ankit.smartattendance.receivers.NotificationDismissReceiver
 
 object NotificationHelper {
     private const val TAG = "NotificationHelper"
@@ -32,17 +34,25 @@ object NotificationHelper {
 
             notificationManager.createNotificationChannel(channel)
             notificationManager.createNotificationChannel(warningChannel)
-            Log.d(TAG, "Notification channels created.")
         }
     }
 
     fun buildAttendanceNotification(context: Context, subject: Subject, schedule: ClassSchedule): Notification {
-        Log.d(TAG, "Building attendance notification for ${subject.name}")
         val notificationId = schedule.id.toInt()
 
         val presentIntent = createActionIntent(context, subject.id, schedule.id, notificationId, true)
         val absentIntent = createActionIntent(context, subject.id, schedule.id, notificationId, false)
         val cancelIntent = createCancelActionIntent(context, subject.id, schedule.id, notificationId)
+
+        val deleteIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId,
+            Intent(context, NotificationDismissReceiver::class.java).apply {
+                putExtra("subject_id", subject.id)
+                putExtra("schedule_id", schedule.id)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val mainIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -50,25 +60,26 @@ object NotificationHelper {
         val pendingMainIntent = PendingIntent.getActivity(context, 0, mainIntent, PendingIntent.FLAG_IMMUTABLE)
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            // DEFINITIVE FIX: Use your app's icon
+            .setSmallIcon(R.mipmap.ic_launcher_round)
             .setContentTitle("Attendance for ${subject.name}")
             .setContentText("Did you attend the class?")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingMainIntent)
+            .setOngoing(true)
+            .setDeleteIntent(deleteIntent)
             .addAction(0, "Present", presentIntent)
             .addAction(0, "Absent", absentIntent)
             .addAction(0, "Cancel", cancelIntent)
-            .setOngoing(true)
             .build()
     }
 
-    // DEFINITIVE FIX: This function was missing.
     fun showUpdatedAttendanceNotification(context: Context, subjectName: String, newPercentage: Double, notificationId: Int, wasCancelled: Boolean) {
         val message = if (wasCancelled) "Class Cancelled." else "Attendance marked. New percentage: ${"%.2f".format(newPercentage)}%"
-        Log.d(TAG, "Showing updated notification: $message")
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            // DEFINITIVE FIX: Use your app's icon
+            .setSmallIcon(R.mipmap.ic_launcher_round)
             .setContentTitle(subjectName)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -79,13 +90,12 @@ object NotificationHelper {
         notificationManager.notify(notificationId, notification)
     }
 
-    // DEFINITIVE FIX: This function was missing.
     fun showAttendanceWarningNotification(context: Context, subject: Subject, newPercentage: Double) {
-        Log.d(TAG, "Showing low attendance warning for ${subject.name}")
-        val notificationId = subject.id.toInt() + 1000 // Ensure unique ID for warning
+        val notificationId = subject.id.toInt() + 1000
 
         val notification = NotificationCompat.Builder(context, WARNING_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            // DEFINITIVE FIX: Use your app's icon
+            .setSmallIcon(R.mipmap.ic_launcher_round)
             .setContentTitle("Low Attendance Warning")
             .setContentText("Your attendance for ${subject.name} has dropped to ${"%.2f".format(newPercentage)}%.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
