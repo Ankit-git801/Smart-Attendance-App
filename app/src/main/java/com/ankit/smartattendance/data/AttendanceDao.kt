@@ -1,11 +1,6 @@
 package com.ankit.smartattendance.data
 
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Transaction
+import androidx.room.*
 import com.ankit.smartattendance.models.AttendanceRecordWithSubject
 import com.ankit.smartattendance.models.SubjectWithAttendance
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +15,7 @@ interface AttendanceDao {
     @Delete
     suspend fun deleteSubject(subject: Subject)
 
-    @Query("SELECT * FROM subjects")
+    @Query("SELECT * FROM subjects ORDER BY name ASC")
     fun getAllSubjects(): Flow<List<Subject>>
 
     @Query("SELECT * FROM subjects WHERE id = :subjectId")
@@ -72,11 +67,17 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records WHERE scheduleId = :scheduleId AND date = :date")
     suspend fun getRecordByScheduleIdAndDate(scheduleId: Long, date: Long): AttendanceRecord?
 
+    @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type = 'MANUAL' LIMIT 1")
+    suspend fun getManualRecordForDateAndSubject(subjectId: Long, date: Long): AttendanceRecord?
+
     @Query("DELETE FROM attendance_records WHERE date = :date AND type = 'HOLIDAY'")
     suspend fun deleteHolidayOnDate(date: Long)
 
     @Query("DELETE FROM attendance_records WHERE date = :date AND type != 'HOLIDAY'")
     suspend fun deleteAttendanceRecordsOnDate(date: Long)
+
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type != 'HOLIDAY'")
+    suspend fun deleteAttendanceRecordsForSubjectOnDate(subjectId: Long, date: Long)
 
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
     suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
@@ -84,8 +85,9 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records")
     suspend fun deleteAllAttendanceRecords()
 
+
     // --- Statistics & Joined Queries ---
-    @Query("SELECT COUNT(*) FROM attendance_records WHERE (type = 'CLASS' OR type = 'MANUAL')")
+    @Query("SELECT COUNT(*) FROM attendance_records WHERE type = 'CLASS' OR type = 'MANUAL'")
     suspend fun getTotalClassesOverall(): Int
 
     @Query("SELECT COUNT(*) FROM attendance_records WHERE isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')")
@@ -99,10 +101,9 @@ interface AttendanceDao {
 
     @Transaction
     @Query("""
-        SELECT 
-            s.*,
-            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND (type = 'CLASS' OR type = 'MANUAL')) as totalClasses,
-            (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')) as presentClasses
+        SELECT s.*,
+               (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND (type = 'CLASS' OR type = 'MANUAL')) as totalClasses,
+               (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')) as presentClasses
         FROM subjects s
     """)
     fun getSubjectsWithAttendance(): Flow<List<SubjectWithAttendance>>
@@ -110,8 +111,8 @@ interface AttendanceDao {
     @Transaction
     @Query("""
         SELECT ar.*, s.name as subjectName, s.color as subjectColor
-        FROM attendance_records ar 
-        LEFT JOIN subjects s ON ar.subjectId = s.id 
+        FROM attendance_records ar
+        LEFT JOIN subjects s ON ar.subjectId = s.id
         WHERE ar.date = :date AND ar.type != 'HOLIDAY'
     """)
     fun getRecordsForDateWithSubject(date: Long): Flow<List<AttendanceRecordWithSubject>>

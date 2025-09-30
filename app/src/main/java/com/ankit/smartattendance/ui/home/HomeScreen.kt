@@ -4,7 +4,6 @@ package com.ankit.smartattendance.ui.home
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,13 +23,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -54,29 +51,28 @@ private data class GreetingInfo(
     val gradientColors: List<Color>
 )
 
-// DEFINITIVE FIX: Updated with new color schemes and time slots.
 private fun getGreetingInfo(): GreetingInfo {
     val calendar = Calendar.getInstance()
     return when (calendar.get(Calendar.HOUR_OF_DAY)) {
         in 5..11 -> GreetingInfo(
             "Good Morning",
             Icons.Outlined.WbSunny,
-            listOf(Color(0xFF87CEEB), Color(0xFFB0E0E6)) // Morning Sky Blue
+            listOf(Color(0xFF87CEEB), Color(0xFFB0E0E6))
         )
         in 12..16 -> GreetingInfo(
             "Good Afternoon",
             Icons.Default.WbSunny,
-            listOf(Color(0xFFFFD580), Color(0xFFFFA500)) // Bright Afternoon Orange
+            listOf(Color(0xFFFFD580), Color(0xFFFFA500))
         )
         in 17..20 -> GreetingInfo(
             "Good Evening",
             Icons.Default.Brightness4,
-            listOf(Color(0xFF87CEEB), Color(0xFFFF5722)) // Evening Red
+            listOf(Color(0xFF87CEEB), Color(0xFFFF5722))
         )
         else -> GreetingInfo(
             "Good Night",
             Icons.Default.NightsStay,
-            listOf(Color(0xFF1A237E), Color(0xFF283593)) // Deep Night Blue
+            listOf(Color(0xFF1A237E), Color(0xFF283593))
         )
     }
 }
@@ -276,11 +272,10 @@ fun GreetingCard(userName: String) {
     LaunchedEffect(Unit) {
         while (true) {
             greetingInfo = getGreetingInfo()
-            delay(60000) // 1 minute
+            delay(60000)
         }
     }
 
-    // DEFINITIVE FIX: Text color now dynamically changes to contrast with the background.
     val textColor = if (greetingInfo.greetingText == "Good Evening" || greetingInfo.greetingText == "Good Night") Color.White.copy(alpha = 0.9f) else Color.Black.copy(alpha = 0.8f)
 
     Box(
@@ -425,9 +420,11 @@ fun TodayScheduleCard(
     var recordType by remember { mutableStateOf<RecordType?>(null) }
     var wasPresent by remember { mutableStateOf<Boolean?>(null) }
 
+    // DEFINITIVE FIX: This LaunchedEffect now ONLY looks for records matching the specific schedule ID.
     LaunchedEffect(allRecords, scheduleWithSubject) {
+        val today = LocalDate.now().toEpochDay()
         val record = allRecords.find {
-            it.scheduleId == scheduleWithSubject.schedule.id && it.date == LocalDate.now().toEpochDay()
+            it.scheduleId == scheduleWithSubject.schedule.id && it.date == today
         }
         isAlreadyMarked = record != null
         wasPresent = record?.isPresent
@@ -483,7 +480,6 @@ fun TodayScheduleCard(
                     }
                 }
             }
-
             AnimatedVisibility(
                 visible = true,
                 enter = fadeIn(animationSpec = tween(300)) + expandVertically(),
@@ -634,73 +630,53 @@ fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, bunkAnalysis: Bunk
                     BunkAnalysisText(it)
                 }
             }
-
-            val animatedPercentage by animateFloatAsState(
-                targetValue = percentage.toFloat(),
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "subject_card_progress"
-            )
-            AnimatedCircularProgress(
-                percentage = animatedPercentage,
-                color = subjectColor
-            )
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(60.dp)) {
+                val animatedProgress by animateFloatAsState(
+                    targetValue = percentage.toFloat(),
+                    animationSpec = tween(1000), label = ""
+                )
+                CircularProgressIndicator(
+                    progress = 1f,
+                    modifier = Modifier.fillMaxSize(),
+                    color = subjectColor.copy(alpha = 0.2f),
+                    strokeWidth = 4.dp
+                )
+                CircularProgressIndicator(
+                    progress = animatedProgress / 100f,
+                    modifier = Modifier.fillMaxSize(),
+                    color = subjectColor,
+                    strokeWidth = 4.dp,
+                    strokeCap = StrokeCap.Round
+                )
+                Text(
+                    "${percentage.toInt()}%",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun BunkAnalysisText(analysis: BunkAnalysis) {
-    val text = when {
-        analysis.classesToAttend > 0 -> "Attend next ${analysis.classesToAttend} classes"
-        analysis.classesToBunk > 0 -> "You can bunk next ${analysis.classesToBunk} classes"
-        else -> "Attendance is on track"
-    }
-    val color = when {
-        analysis.classesToAttend > 0 -> MaterialTheme.colorScheme.error
-        analysis.classesToBunk > 0 -> SuccessGreen
-        else -> MaterialTheme.colorScheme.primary
+fun BunkAnalysisText(analysis: BunkAnalysis) {
+    val (text, color) = when {
+        analysis.classesToAttend > 0 -> {
+            val plural = if (analysis.classesToAttend > 1) "classes" else "class"
+            "Attend next ${analysis.classesToAttend} $plural" to ErrorRed
+        }
+        analysis.classesToBunk > 0 -> {
+            val plural = if (analysis.classesToBunk > 1) "classes" else "class"
+            "You can bunk ${analysis.classesToBunk} $plural" to SuccessGreen
+        }
+        else -> "On target" to MaterialTheme.colorScheme.primary
     }
 
     Text(
         text = text,
         style = MaterialTheme.typography.bodySmall,
-        fontWeight = FontWeight.Bold,
         color = color,
+        fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(top = 4.dp)
     )
-}
-
-@Composable
-fun AnimatedCircularProgress(
-    percentage: Float,
-    color: Color,
-    radius: Dp = 32.dp,
-    strokeWidth: Dp = 4.dp
-) {
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawArc(
-                color = color.copy(alpha = 0.3f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
-            )
-            drawArc(
-                color = color,
-                startAngle = -90f,
-                sweepAngle = (percentage / 100) * 360f,
-                useCenter = false,
-                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
-            )
-        }
-        Text(
-            text = "${percentage.toInt()}%",
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
 }

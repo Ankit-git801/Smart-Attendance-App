@@ -96,8 +96,11 @@ private fun DayDetailDialog(
                 } else {
                     LazyColumn {
                         items(recordsForDay, key = { "${it.attendanceRecord.id}-${it.attendanceRecord.date}" }) { recordItem ->
-                            // This line now works correctly because subjectColor is a String?
-                            val color = Color(android.graphics.Color.parseColor(recordItem.subjectColor ?: "#808080"))
+                            val color = try {
+                                Color(android.graphics.Color.parseColor(recordItem.subjectColor ?: "#808080"))
+                            } catch (e: Exception) {
+                                Color.Gray
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -159,7 +162,6 @@ fun HolidayConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     )
 }
 
-
 @Composable
 fun AttendanceCalendar(
     allRecords: List<AttendanceRecord>,
@@ -207,8 +209,8 @@ private fun Day(
     }
     val isToday = day.date == LocalDate.now()
 
-    val isHoliday = recordsForDay.any { it.type.name == RecordType.HOLIDAY.name }
-    val hasAttendance = recordsForDay.any { it.type.name != RecordType.HOLIDAY.name }
+    val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
+    val hasAttendance = recordsForDay.any { it.type != RecordType.HOLIDAY }
 
     val dayBackgroundColor = when {
         isHoliday -> HolidayYellow.copy(alpha = 0.5f)
