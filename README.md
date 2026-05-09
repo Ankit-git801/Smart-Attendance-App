@@ -17,10 +17,12 @@ Most students struggle with tracking attendance vs. university requirements. Thi
 - 🗓️ **Weekly schedules** → Auto-generates class reminders & daily views.  
 - ✅ **One-tap attendance** → From home cards or actionable notifications.  
 - 📅 **Holiday-aware calendar** → Toggle holidays & auto-adjust stats.  
+- 🔢 **Visual Summary** → Subject-specific calendar shows daily attendance counts (Green: Present, Red: Absent).
+- 👋 **Personalized Onboarding** → Welcoming name-based setup on first launch.
 - 🔕 **Offline-first Room DB** → Works entirely without internet.  
-- ⏰ **Reliable reminders** → Exact alarms + foreground notifications.  
+- ⏰ **Reliable reminders** → Exact alarms + foreground notifications (Auto-rescheduled for next week).
 - ♻️ **Boot-resilient** → Alarms survive reboots & battery optimizations.  
-- ✨ **Modern UX** → Animated indicators, personalized themes, haptics.  
+- ✨ **Modern UX** → AMOLED black immersive bars, animated indicators, haptics.
 
 ---
 
