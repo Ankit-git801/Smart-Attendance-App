@@ -70,11 +70,17 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type = 'MANUAL' LIMIT 1")
     suspend fun getManualRecordForDateAndSubject(subjectId: Long, date: Long): AttendanceRecord?
 
+    @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type != 'HOLIDAY'")
+    suspend fun getAttendanceRecordsForSubjectOnDate(subjectId: Long, date: Long): List<AttendanceRecord>
+
     @Query("DELETE FROM attendance_records WHERE date = :date AND type = 'HOLIDAY'")
     suspend fun deleteHolidayOnDate(date: Long)
 
     @Query("DELETE FROM attendance_records WHERE date = :date AND type != 'HOLIDAY'")
     suspend fun deleteAttendanceRecordsOnDate(date: Long)
+
+    @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId = :scheduleId AND type != 'HOLIDAY'")
+    suspend fun deleteAttendanceRecordBySchedule(subjectId: Long, date: Long, scheduleId: Long)
 
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type != 'HOLIDAY'")
     suspend fun deleteAttendanceRecordsForSubjectOnDate(subjectId: Long, date: Long)

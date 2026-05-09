@@ -35,7 +35,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val userName = preferencesManager.userNameFlow.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5000),
-        "User"
+        ""
+    )
+
+    val isOnboardingComplete = preferencesManager.isOnboardingCompleteFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        false
     )
 
     val todaysScheduleWithSubjects: StateFlow<List<ScheduleWithSubject>> =
@@ -73,6 +79,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setUserName(name: String) {
         viewModelScope.launch {
             preferencesManager.saveUserName(name)
+        }
+    }
+
+    fun completeOnboarding(name: String) {
+        viewModelScope.launch {
+            preferencesManager.saveUserName(name)
+            preferencesManager.setOnboardingComplete(true)
         }
     }
 
@@ -122,14 +135,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         note: String
     ) {
         viewModelScope.launch {
-            if (type == RecordType.CLASS || type == RecordType.MANUAL) {
-                attendanceDao.deleteAttendanceRecordsForSubjectOnDate(subjectId, date.toEpochDay())
+            val dateAsLong = date.toEpochDay()
+            
+            // FIX: Ensure data consistency by removing any existing attendance records 
+            // for this subject on this date before adding a new one.
+            // This prevents "ghost" duplicates if a user changes their mind.
+            if (scheduleId != 0L && scheduleId != -1L && scheduleId != -3L) {
+                // If it's a specific schedule class, delete that specific one
+                attendanceDao.deleteAttendanceRecordBySchedule(subjectId, dateAsLong, scheduleId)
+            } else {
+                // Otherwise, for manual/manual-extra records, we might want to allow 
+                // multiple on the same day, but generally for "Daily" status update 
+                // from the calendar, we should clear existing main ones.
+                // However, logic below ensures we don't accidentally clear 
+                // unrelated schedules if we are just adding an "Extra Class".
+                
+                if (type == RecordType.MANUAL && scheduleId == -1L) {
+                    // This is a manual update from Calendar Dialog 'Mark Present/Absent'
+                    attendanceDao.deleteAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
+                }
             }
 
             val record = AttendanceRecord(
                 subjectId = subjectId,
                 scheduleId = scheduleId,
-                date = date.toEpochDay(),
+                date = dateAsLong,
                 isPresent = isPresent,
                 type = type,
                 note = note
@@ -142,6 +172,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun updateAttendanceRecord(subjectId: Long, date: LocalDate, isPresent: Boolean) {
         val note = if (isPresent) "Marked Present" else "Marked Absent"
         markAttendance(subjectId, -1L, date, RecordType.MANUAL, isPresent, note)
+    }
+
+    fun deleteAttendanceRecordById(recordId: Long, subjectId: Long) {
+        viewModelScope.launch {
+            val recordToDelete = attendanceDao.getAllAttendanceRecords().first().find { it.id == recordId }
+            if (recordToDelete != null) {
+                attendanceDao.deleteAttendanceRecord(recordToDelete)
+                checkAndTriggerLowAttendanceWarning(subjectId)
+            }
+        }
     }
 
     fun deleteAttendanceRecordForDate(subjectId: Long, date: LocalDate) {
@@ -228,11 +268,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onHolidayToggleRequested(date: LocalDate) {
         viewModelScope.launch {
-            val isAlreadyHoliday = attendanceDao.getAllAttendanceRecords().first()
-                .any { it.date == date.toEpochDay() && it.type == RecordType.HOLIDAY }
+            val allRecords = attendanceDao.getAllAttendanceRecords().first()
+            val holidayRecord = allRecords.find { it.date == date.toEpochDay() && it.type == RecordType.HOLIDAY }
 
-            if (isAlreadyHoliday) {
-                attendanceDao.deleteHolidayOnDate(date.toEpochDay())
+            if (holidayRecord != null) {
+                attendanceDao.deleteAttendanceRecord(holidayRecord)
+                // Reschedule alarms for this day
+                val dayOfWeek = date.dayOfWeek.value
+                val schedulesForDay = attendanceDao.getSchedulesForDayNow(dayOfWeek)
+                val allSubjectsList = attendanceDao.getAllSubjects().first()
+                schedulesForDay.forEach { schedule ->
+                    val subject = allSubjectsList.find { it.id == schedule.subjectId }
+                    if (subject != null) {
+                        AlarmScheduler.scheduleClassAlarm(getApplication(), subject, schedule)
+                    }
+                }
             } else {
                 _showHolidayDialog.value = date
             }
@@ -271,13 +321,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun addPastRecords(subjectId: Long, presentCount: Int, absentCount: Int) {
         viewModelScope.launch {
             val note = "Past Record"
-            var pseudoDate = System.currentTimeMillis() * -1
+            val today = LocalDate.now()
 
-            repeat(presentCount) {
+            repeat(presentCount) { i ->
+                val date = today.minusDays(i.toLong() + 1).toEpochDay()
                 val record = AttendanceRecord(
                     subjectId = subjectId,
                     scheduleId = -3L,
-                    date = pseudoDate--,
+                    date = date,
                     isPresent = true,
                     note = note,
                     type = RecordType.MANUAL
@@ -285,11 +336,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 attendanceDao.insertAttendanceRecord(record)
             }
 
-            repeat(absentCount) {
+            repeat(absentCount) { i ->
+                val date = today.minusDays((presentCount + i).toLong() + 1).toEpochDay()
                 val record = AttendanceRecord(
                     subjectId = subjectId,
                     scheduleId = -3L,
-                    date = pseudoDate--,
+                    date = date,
                     isPresent = false,
                     note = note,
                     type = RecordType.MANUAL

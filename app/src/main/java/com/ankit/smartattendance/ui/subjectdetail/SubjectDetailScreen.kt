@@ -27,6 +27,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.*
 import com.ankit.smartattendance.models.SubjectWithAttendance
@@ -51,6 +53,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     var showManualAddDialog by remember { mutableStateOf(false) }
     var showMarkAttendanceDialog by remember { mutableStateOf<LocalDate?>(null) }
     var bunkAnalysis by remember { mutableStateOf<BunkAnalysis?>(null) }
+    val haptic = LocalHapticFeedback.current
 
     val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     val subjectWithAttendance by remember(subjectsWithAttendance, subjectId) {
@@ -97,7 +100,8 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             onConfirm = { isPresent ->
                 appViewModel.updateAttendanceRecord(subjectId, date, isPresent)
             },
-            onDelete = { appViewModel.deleteAttendanceRecordForDate(subjectId, date) },
+            onDeleteMain = { appViewModel.deleteAttendanceRecordForDate(subjectId, date) },
+            onDeleteRecord = { recordId -> appViewModel.deleteAttendanceRecordById(recordId, subjectId) },
             onAddExtra = { isPresent -> appViewModel.addExtraClasses(subjectId, date, isPresent, 1) }
         )
     }
@@ -105,7 +109,7 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(subjectWithAttendance?.subject?.name ?: "Details") },
+                title = { Text(subjectWithAttendance?.subject?.name ?: "Details", fontWeight = FontWeight.Bold) },
                 navigationIcon = { IconButton({ navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Back") } },
                 actions = {
                     IconButton({ showManualAddDialog = true }) { Icon(Icons.Default.PlaylistAdd, "Add Past Records") }
@@ -217,11 +221,12 @@ fun MarkAttendanceDialog(
     recordsForDay: List<AttendanceRecord>,
     onDismiss: () -> Unit,
     onConfirm: (Boolean) -> Unit,
-    onDelete: () -> Unit,
+    onDeleteMain: () -> Unit,
+    onDeleteRecord: (Long) -> Unit,
     onAddExtra: (Boolean) -> Unit
 ) {
     val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
-    val hasRecord = recordsForDay.any { it.type == RecordType.CLASS || it.type == RecordType.MANUAL && it.scheduleId != 0L }
+    val hasMainRecord = recordsForDay.any { (it.type == RecordType.CLASS || it.type == RecordType.CANCELLED) || (it.type == RecordType.MANUAL && it.scheduleId != 0L && it.scheduleId != -3L) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -243,9 +248,9 @@ fun MarkAttendanceDialog(
                     onConfirm(false)
                     onDismiss()
                 })
-                if(hasRecord) {
+                if(hasMainRecord) {
                     AttendanceActionRow(Icons.Default.DeleteOutline, "Clear Main Attendance", onClick = {
-                        onDelete()
+                        onDeleteMain()
                         onDismiss()
                     }, isDestructive = true)
                 }
@@ -263,13 +268,11 @@ fun MarkAttendanceDialog(
                 })
 
                 // List extra classes for deletion
-                recordsForDay.filter { it.scheduleId == 0L }.forEach { record ->
+                recordsForDay.filter { it.scheduleId == 0L || it.scheduleId == -3L }.forEach { record ->
                     val status = if (record.isPresent) "Present" else "Absent"
-                    AttendanceActionRow(Icons.Default.Delete, "Delete Extra ${status}", onClick = {
-                        // Here you would need a way to delete specific records. For now, we clear all for the day.
-                        // This part needs a more specific delete function if multiple extra classes are to be handled individually.
-                        // A simpler approach for now might be to just show they exist.
-                        onDelete() // This will clear all for now as a simple solution
+                    val label = if (record.scheduleId == -3L) "Past $status" else "Extra $status"
+                    AttendanceActionRow(Icons.Default.Delete, "Delete $label", onClick = {
+                        onDeleteRecord(record.id)
                         onDismiss()
                     }, isDestructive = true)
                 }
@@ -481,20 +484,17 @@ private fun Day(
     }
     val isToday = day.date == LocalDate.now()
 
-    val dayStatus = when {
-        recordsForDay.any { it.type == RecordType.HOLIDAY } -> DayStatus.Holiday
-        recordsForDay.any { it.type == RecordType.CANCELLED } -> DayStatus.Cancelled
-        recordsForDay.any { it.isPresent } -> DayStatus.Present
-        recordsForDay.isNotEmpty() -> DayStatus.Absent
-        else -> DayStatus.None
-    }
+    val presentCount = recordsForDay.count { it.isPresent && it.type != RecordType.HOLIDAY }
+    val absentCount = recordsForDay.count { !it.isPresent && it.type != RecordType.HOLIDAY && it.type != RecordType.CANCELLED }
+    val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
+    val isCancelled = recordsForDay.any { it.type == RecordType.CANCELLED }
 
-    val dayBackgroundColor = when (dayStatus) {
-        DayStatus.Present -> SuccessGreen.copy(alpha = 0.3f)
-        DayStatus.Absent -> ErrorRed.copy(alpha = 0.3f)
-        DayStatus.Cancelled -> Color.Gray.copy(alpha = 0.3f)
-        DayStatus.Holiday -> HolidayYellow.copy(alpha = 0.5f)
-        DayStatus.None -> Color.Transparent
+    val dayBackgroundColor = when {
+        isHoliday -> HolidayYellow.copy(alpha = 0.5f)
+        presentCount > 0 -> SuccessGreen.copy(alpha = 0.3f)
+        absentCount > 0 -> ErrorRed.copy(alpha = 0.3f)
+        isCancelled -> Color.Gray.copy(alpha = 0.3f)
+        else -> Color.Transparent
     }
 
     Box(
@@ -511,14 +511,53 @@ private fun Day(
             .clickable { onDayClick(day.date) },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = day.date.dayOfMonth.toString(),
-            color = when {
-                isToday -> MaterialTheme.colorScheme.primary
-                else -> LocalContentColor.current
-            },
-            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Day Number
+            Text(
+                text = day.date.dayOfMonth.toString(),
+                color = when {
+                    isToday -> MaterialTheme.colorScheme.primary
+                    else -> LocalContentColor.current
+                },
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                fontSize = 15.sp,
+                lineHeight = 15.sp
+            )
+
+            // Attendance counts directly below
+            if (!isHoliday && (presentCount > 0 || absentCount > 0)) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 1.dp)
+                ) {
+                    if (presentCount > 0) {
+                        Text(
+                            text = presentCount.toString(),
+                            color = SuccessGreen,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = 10.sp
+                        )
+                    }
+                    if (presentCount > 0 && absentCount > 0) {
+                        Spacer(Modifier.width(3.dp))
+                    }
+                    if (absentCount > 0) {
+                        Text(
+                            text = absentCount.toString(),
+                            color = ErrorRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = 10.sp
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -12,10 +12,12 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.Icons
@@ -33,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -47,6 +50,7 @@ import androidx.navigation.navArgument
 import com.ankit.smartattendance.ui.addsubject.AddSubjectScreen
 import com.ankit.smartattendance.ui.calendar.CalendarScreen
 import com.ankit.smartattendance.ui.home.HomeScreen
+import com.ankit.smartattendance.ui.onboarding.OnboardingScreen
 import com.ankit.smartattendance.ui.settings.SettingsScreen
 import com.ankit.smartattendance.ui.statistics.StatisticsScreen
 import com.ankit.smartattendance.ui.subjectdetail.SubjectDetailScreen
@@ -60,8 +64,8 @@ import com.google.accompanist.permissions.rememberPermissionState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
         NotificationHelper.createNotificationChannel(this)
 
         setContent {
@@ -205,6 +209,7 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val isOnboardingComplete by appViewModel.isOnboardingComplete.collectAsState()
 
     val topLevelDestinations = listOf(
         BottomNavItem.Home.route,
@@ -215,9 +220,9 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val showBottomBar = topLevelDestinations.any { it == currentDestination?.route }
 
     Scaffold(
-        modifier = Modifier.systemBarsPadding(),
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (showBottomBar) {
+            if (showBottomBar && isOnboardingComplete) {
                 BottomNavigationBar(navController = navController)
             }
         },
@@ -226,6 +231,7 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
         AppNavigation(
             navController = navController,
             appViewModel = appViewModel,
+            isOnboardingComplete = isOnboardingComplete,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -237,15 +243,23 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
 fun AppNavigation(
     navController: NavHostController,
     appViewModel: AppViewModel,
+    isOnboardingComplete: Boolean,
     modifier: Modifier = Modifier
 ) {
     NavHost(
         navController = navController,
-        startDestination = BottomNavItem.Home.route,
+        startDestination = if (isOnboardingComplete) BottomNavItem.Home.route else "onboarding",
         modifier = modifier,
         enterTransition = { EnterTransition.None },
         exitTransition = { ExitTransition.None }
     ) {
+        composable("onboarding") {
+            OnboardingScreen(appViewModel = appViewModel, onComplete = {
+                navController.navigate(BottomNavItem.Home.route) {
+                    popUpTo("onboarding") { inclusive = true }
+                }
+            })
+        }
         composable(BottomNavItem.Home.route) {
             HomeScreen(navController = navController, appViewModel = appViewModel)
         }
@@ -296,7 +310,9 @@ fun BottomNavigationBar(navController: NavHostController, modifier: Modifier = M
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    NavigationBar(modifier = modifier) {
+    NavigationBar(
+        modifier = modifier.fillMaxWidth(),
+    ) {
         items.forEach { item ->
             val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
             NavigationBarItem(

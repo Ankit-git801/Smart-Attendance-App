@@ -4,9 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material3.*
@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.AttendanceRecord
 import com.ankit.smartattendance.data.RecordType
@@ -40,10 +42,14 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
     val allRecords by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     val holidayConfirmationDate by appViewModel.showHolidayDialog.collectAsState()
+    val haptic = LocalHapticFeedback.current
 
     if (holidayConfirmationDate != null) {
         HolidayConfirmationDialog(
-            onConfirm = { appViewModel.onHolidayToggleConfirmed() },
+            onConfirm = { 
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                appViewModel.onHolidayToggleConfirmed() 
+            },
             onDismiss = { appViewModel.onHolidayToggleDismissed() }
         )
     }
@@ -58,18 +64,35 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
             isHoliday = isHoliday,
             onDismiss = { selectedDate = null },
             onSubjectClick = { subjectId ->
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 selectedDate = null
                 navController.navigate("subject_detail/$subjectId")
             },
-            onHolidayToggle = { appViewModel.onHolidayToggleRequested(date) }
+            onHolidayToggle = { 
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                appViewModel.onHolidayToggleRequested(date) 
+            }
         )
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Calendar") }) }) { paddingValues ->
-        Column(Modifier.padding(paddingValues)) {
+    Scaffold(
+        topBar = { 
+            TopAppBar(
+                title = { Text("Calendar", fontWeight = FontWeight.Bold) }
+            ) 
+        }
+    ) { paddingValues ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
             AttendanceCalendar(
                 allRecords = allRecords,
-                onDayClick = { selectedDate = it }
+                onDayClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    selectedDate = it 
+                }
             )
         }
     }
@@ -88,34 +111,44 @@ private fun DayDetailDialog(
         onDismissRequest = onDismiss,
         title = { Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d"))) },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
                 if (isHoliday) {
                     Text("This day is marked as a holiday. All attendance for this day is ignored.")
                 } else if (recordsForDay.isEmpty()) {
                     Text("No classes were attended or missed on this day.")
                 } else {
-                    LazyColumn {
-                        items(recordsForDay, key = { "${it.attendanceRecord.id}-${it.attendanceRecord.date}" }) { recordItem ->
-                            val color = try {
-                                Color(android.graphics.Color.parseColor(recordItem.subjectColor ?: "#808080"))
-                            } catch (e: Exception) {
-                                Color.Gray
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSubjectClick(recordItem.attendanceRecord.subjectId) }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Circle, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(recordItem.subjectName ?: "Unknown Subject", modifier = Modifier.weight(1f))
-                                Text(
-                                    if (recordItem.attendanceRecord.isPresent) "Present" else "Absent",
-                                    color = if (recordItem.attendanceRecord.isPresent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                )
-                            }
+                    recordsForDay.forEach { recordItem ->
+                        val color = try {
+                            Color(android.graphics.Color.parseColor(recordItem.subjectColor ?: "#808080"))
+                        } catch (e: Exception) {
+                            Color.Gray
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSubjectClick(recordItem.attendanceRecord.subjectId) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Circle,
+                                contentDescription = null,
+                                tint = color,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                recordItem.subjectName ?: "Unknown Subject",
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                if (recordItem.attendanceRecord.isPresent) "Present" else "Absent",
+                                color = if (recordItem.attendanceRecord.isPresent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
                         }
                     }
                 }
@@ -179,6 +212,11 @@ fun AttendanceCalendar(
         firstDayOfWeek = firstDayOfWeek
     )
 
+    // Optimization: Group records by date once
+    val recordsByDate = remember(allRecords) {
+        allRecords.groupBy { it.date }
+    }
+
     Column {
         val visibleMonth = state.firstVisibleMonth.yearMonth
         Text(
@@ -192,7 +230,8 @@ fun AttendanceCalendar(
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
-                Day(day, allRecords, onDayClick)
+                val dayRecords = recordsByDate[day.date.toEpochDay()] ?: emptyList()
+                Day(day.date, dayRecords, onDayClick)
             }
         )
     }
@@ -200,14 +239,11 @@ fun AttendanceCalendar(
 
 @Composable
 private fun Day(
-    day: CalendarDay,
-    allRecords: List<AttendanceRecord>,
+    date: LocalDate,
+    recordsForDay: List<AttendanceRecord>,
     onDayClick: (LocalDate) -> Unit
 ) {
-    val recordsForDay = remember(day.date, allRecords) {
-        allRecords.filter { it.date == day.date.toEpochDay() }
-    }
-    val isToday = day.date == LocalDate.now()
+    val isToday = date == LocalDate.now()
 
     val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
     val hasAttendance = recordsForDay.any { it.type != RecordType.HOLIDAY }
@@ -229,11 +265,11 @@ private fun Day(
                 color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
                 shape = CircleShape
             )
-            .clickable { onDayClick(day.date) },
+            .clickable { onDayClick(date) },
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = day.date.dayOfMonth.toString(),
+            text = date.dayOfMonth.toString(),
             color = when {
                 isToday -> MaterialTheme.colorScheme.primary
                 else -> LocalContentColor.current

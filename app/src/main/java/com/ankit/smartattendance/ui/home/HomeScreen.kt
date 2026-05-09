@@ -4,11 +4,16 @@ package com.ankit.smartattendance.ui.home
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +35,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.BunkAnalysis
 import com.ankit.smartattendance.data.RecordType
@@ -83,6 +90,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val todaysSchedule by appViewModel.todaysScheduleWithSubjects.collectAsState()
     val userName by appViewModel.userName.collectAsState()
     val bunkAnalysisMap by appViewModel.bunkAnalysisMap.collectAsState()
+    val haptic = LocalHapticFeedback.current
 
     var showExtraClassDialog by remember { mutableStateOf(false) }
 
@@ -91,6 +99,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             subjects = subjectsWithAttendance.map { it.subject },
             onDismiss = { showExtraClassDialog = false },
             onConfirm = { subjectId, isPresent, count ->
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 appViewModel.addExtraClasses(subjectId, LocalDate.now(), isPresent, count)
                 showExtraClassDialog = false
             }
@@ -101,6 +110,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -111,8 +121,14 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 GreetingCard(userName = userName)
                 Spacer(modifier = Modifier.height(24.dp))
                 QuickActions(
-                    onExtraClassClick = { showExtraClassDialog = true },
-                    onNewSubjectClick = { navController.navigate("add_subject") }
+                    onExtraClassClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showExtraClassDialog = true 
+                    },
+                    onNewSubjectClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        navController.navigate("add_subject") 
+                    }
                 )
             }
 
@@ -126,7 +142,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             }
 
             if (todaysSchedule.isEmpty()) {
-                item {
+                item(key = "empty_schedule") {
                     EmptyState(
                         icon = Icons.Outlined.WbSunny,
                         title = "No Classes Today",
@@ -139,13 +155,14 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                         scheduleWithSubject = scheduleWithSubject,
                         appViewModel = appViewModel,
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             navController.navigate("subject_detail/${scheduleWithSubject.subject.id}")
                         }
                     )
                 }
             }
 
-            item {
+            item(key = "all_subjects_header") {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "ALL SUBJECTS",
@@ -156,13 +173,16 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             }
 
             if (subjectsWithAttendance.isEmpty()) {
-                item {
+                item(key = "empty_subjects") {
                     EmptyState(
                         icon = Icons.Filled.School,
                         title = "No Subjects Added",
-                        subtitle = "Get started by adding your first subject. You can set a custom name, color, and attendance target for it.",
+                        subtitle = "Get started by adding your first subject.",
                         buttonText = "Add New Subject",
-                        onButtonClick = { navController.navigate("add_subject") }
+                        onButtonClick = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            navController.navigate("add_subject") 
+                        }
                     )
                 }
             } else {
@@ -172,11 +192,14 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                         subjectWithAttendance = subjectWithAttendance,
                         bunkAnalysis = bunkAnalysis,
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             navController.navigate("subject_detail/${subjectWithAttendance.subject.id}")
                         }
                     )
                 }
             }
+            // Add extra space for navigation bar
+            item(key = "bottom_spacer") { Spacer(Modifier.height(80.dp)) }
         }
     }
 }
@@ -419,8 +442,11 @@ fun TodayScheduleCard(
     var isAlreadyMarked by remember { mutableStateOf(false) }
     var recordType by remember { mutableStateOf<RecordType?>(null) }
     var wasPresent by remember { mutableStateOf<Boolean?>(null) }
+    
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, label = "card_scale")
 
-    // DEFINITIVE FIX: This LaunchedEffect now ONLY looks for records matching the specific schedule ID.
     LaunchedEffect(allRecords, scheduleWithSubject) {
         val today = LocalDate.now().toEpochDay()
         val record = allRecords.find {
@@ -441,15 +467,25 @@ fun TodayScheduleCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = MaterialTheme.shapes.large
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column {
             Row(modifier = Modifier.height(IntrinsicSize.Min)) {
                 Box(
                     modifier = Modifier
-                        .width(8.dp)
+                        .width(6.dp)
                         .fillMaxHeight()
                         .background(subjectColor)
                 )
@@ -598,61 +634,79 @@ fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, bunkAnalysis: Bunk
     val subject = subjectWithAttendance.subject
     val percentage = subjectWithAttendance.percentage
     val subjectColor = Color(android.graphics.Color.parseColor(subject.color))
+    
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, label = "card_scale")
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = subject.name,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = "Target: ${subject.targetAttendance}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "${subjectWithAttendance.presentClasses} / ${subjectWithAttendance.totalClasses} classes attended",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-                bunkAnalysis?.let {
-                    BunkAnalysisText(it)
-                }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
             }
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(60.dp)) {
-                val animatedProgress by animateFloatAsState(
-                    targetValue = percentage.toFloat(),
-                    animationSpec = tween(1000), label = ""
-                )
-                CircularProgressIndicator(
-                    progress = 1f,
-                    modifier = Modifier.fillMaxSize(),
-                    color = subjectColor.copy(alpha = 0.2f),
-                    strokeWidth = 4.dp
-                )
-                CircularProgressIndicator(
-                    progress = animatedProgress / 100f,
-                    modifier = Modifier.fillMaxSize(),
-                    color = subjectColor,
-                    strokeWidth = 4.dp,
-                    strokeCap = StrokeCap.Round
-                )
-                Text(
-                    "${percentage.toInt()}%",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Box {
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = subject.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Target: ${subject.targetAttendance}%",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${subjectWithAttendance.presentClasses} / ${subjectWithAttendance.totalClasses} classes",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    bunkAnalysis?.let {
+                        BunkAnalysisText(it)
+                    }
+                }
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(70.dp)) {
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = percentage.toFloat(),
+                        animationSpec = tween(1500, easing = FastOutSlowInEasing), label = "progress"
+                    )
+                    CircularProgressIndicator(
+                        progress = 1f,
+                        modifier = Modifier.fillMaxSize(),
+                        color = subjectColor.copy(alpha = 0.15f),
+                        strokeWidth = 6.dp
+                    )
+                    CircularProgressIndicator(
+                        progress = animatedProgress / 100f,
+                        modifier = Modifier.fillMaxSize(),
+                        color = subjectColor,
+                        strokeWidth = 6.dp,
+                        strokeCap = StrokeCap.Round
+                    )
+                    Text(
+                        "${percentage.toInt()}%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         }
     }

@@ -24,6 +24,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.navigation.NavController
 import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.SubjectWithAttendance
@@ -38,6 +40,7 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
     val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
     var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(subjectsWithAttendance) {
         coroutineScope.launch {
@@ -47,7 +50,9 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Your Attendance Statistics") })
+            TopAppBar(
+                title = { Text("Statistics", fontWeight = FontWeight.Bold) }
+            )
         }
     ) { paddingValues ->
         if (subjectsWithAttendance.isEmpty()) {
@@ -55,8 +60,8 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier
-                    .padding(paddingValues)
-                    .fillMaxSize(),
+                    .fillMaxSize()
+                    .padding(paddingValues),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -74,16 +79,20 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
                         "Subject Breakdown",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 16.dp)
+                        modifier = Modifier.padding(top = 16.dp, start = 4.dp)
                     )
                 }
 
                 items(subjectsWithAttendance, key = { it.subject.id }) { subjectWithAttendance ->
                     SubjectStatCard(
-                        navController = navController,
-                        subjectWithAttendance = subjectWithAttendance
+                        subjectWithAttendance = subjectWithAttendance,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            navController.navigate("subject_detail/${subjectWithAttendance.subject.id}")
+                        }
                     )
                 }
+                item { Spacer(Modifier.height(80.dp)) }
             }
         }
     }
@@ -224,8 +233,8 @@ private fun StatItem(
 
 @Composable
 private fun SubjectStatCard(
-    navController: NavController,
-    subjectWithAttendance: SubjectWithAttendance
+    subjectWithAttendance: SubjectWithAttendance,
+    onClick: () -> Unit
 ) {
     val subject = subjectWithAttendance.subject
     val percentage = subjectWithAttendance.percentage
@@ -233,12 +242,14 @@ private fun SubjectStatCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { navController.navigate("subject_detail/${subject.id}") }
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
-                    .size(10.dp)
+                    .size(12.dp)
                     .background(
                         Color(android.graphics.Color.parseColor(subject.color)),
                         CircleShape
@@ -246,40 +257,42 @@ private fun SubjectStatCard(
             )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(subject.name, fontWeight = FontWeight.SemiBold)
+                Text(subject.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     "Target: ${subject.targetAttendance}%",
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Text(
                 text = "${subjectWithAttendance.presentClasses}/${subjectWithAttendance.totalClasses}",
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 16.dp)
             )
 
             val color = if (percentage >= subject.targetAttendance) SuccessGreen else ErrorRed
             Row(
-                modifier = Modifier.width(65.dp), // Fixed width to ensure alignment
+                modifier = Modifier.width(70.dp),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.Bottom // Use Bottom alignment
+                verticalAlignment = Alignment.Bottom
             ) {
                 Text(
                     text = "%.1f".format(percentage),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
                     color = color,
-                    modifier = Modifier.alignByBaseline() // Aligns text by its baseline
+                    modifier = Modifier.alignByBaseline()
                 )
                 Text(
                     text = "%",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
                     color = color,
                     modifier = Modifier
-                        .padding(start = 2.dp)
-                        .alignByBaseline() // Aligns this text by its baseline
+                        .padding(start = 2.dp, bottom = 2.dp)
+                        .alignByBaseline()
                 )
             }
         }

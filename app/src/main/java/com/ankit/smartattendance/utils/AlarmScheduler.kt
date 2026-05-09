@@ -22,6 +22,7 @@ object AlarmScheduler {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("subject_id", subject.id)
             putExtra("schedule_id", schedule.id)
+            putExtra("subject_name", subject.name)
         }
 
         val requestCode = schedule.id.toInt()
@@ -41,6 +42,12 @@ object AlarmScheduler {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
+
+        // Check if today is a holiday before scheduling for today or in the future
+        // Note: For simplicity, we check if the alarmTime's date is a holiday.
+        // This requires a DB check, which we'll do in a non-blocking way if possible, 
+        // or just rely on the receiver/service to check before showing notification.
+        // Re-scheduling already handles this via cancelClassAlarm in holiday toggle.
 
         // If the calculated end time for today has already passed, schedule it for the same day next week.
         if (alarmTime.timeInMillis <= System.currentTimeMillis()) {

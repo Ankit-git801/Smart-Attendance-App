@@ -1,8 +1,9 @@
 <resources>
     <!-- Base application theme. -->
     <style name="Theme.SmartAttendance" parent="android:Theme.Material.Light.NoActionBar">
-        <!-- For Light Mode -->
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
+        <!--
+            We leave system bar colors to the enableEdgeToEdge() API
+            which is called in MainActivity.
+        -->
     </style>
 </resources>
