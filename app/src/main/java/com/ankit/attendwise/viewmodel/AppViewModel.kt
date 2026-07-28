@@ -568,7 +568,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun restoreDataFromCloud(onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val success = cloudSyncManager.restoreAllData(attendanceDao)
+            if (success) {
+                rescheduleAllAlarms()
+            }
             onComplete(success)
+        }
+    }
+
+    private fun rescheduleAllAlarms() {
+        viewModelScope.launch {
+            val subjects = attendanceDao.getAllSubjects().first()
+            subjects.forEach { subject ->
+                val schedules = attendanceDao.getSchedulesForSubject(subject.id)
+                schedules.forEach { schedule ->
+                    AlarmScheduler.scheduleClassAlarm(getApplication(), subject, schedule)
+                }
+            }
         }
     }
 
@@ -604,7 +619,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 attendanceDao.deleteAllAttendanceRecords()
 
                 // 3. Restore all attendance data silently
-                cloudSyncManager.restoreAllData(attendanceDao)
+                val success = cloudSyncManager.restoreAllData(attendanceDao)
+                if (success) {
+                    rescheduleAllAlarms()
+                }
                 onComplete(true, null)
             } catch (e: Exception) {
                 val errorMsg = e.message

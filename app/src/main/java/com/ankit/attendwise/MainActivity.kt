@@ -211,7 +211,7 @@ fun RequestManufacturerBatteryOptimization() {
 
 
 // ... (The rest of your MainActivity.kt remains exactly the same)
-// SmartAttendanceApp, AppNavigation, BottomNavigationBar, and BottomNavItem are unchanged.
+// AttendWiseApp, AppNavigation, BottomNavigationBar, and BottomNavItem.
 
 @Composable
 fun AttendWiseApp(appViewModel: AppViewModel) {

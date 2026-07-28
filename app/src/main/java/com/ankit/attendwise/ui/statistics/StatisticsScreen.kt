@@ -178,18 +178,21 @@ private fun DonutChart(
         animationSpec = tween(durationMillis = 1000),
         label = "donut_chart_progress"
     )
+    
+    val chartColor = if (animatedPercentage >= 75f) SuccessGreen else ErrorRed
+
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
         Canvas(modifier = Modifier.size(radius * 2)) {
             val sweepAngle = (animatedPercentage / 100) * 360f
             drawArc(
-                color = SuccessGreen.copy(alpha = 0.3f),
+                color = chartColor.copy(alpha = 0.3f),
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
                 style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
             )
             drawArc(
-                color = SuccessGreen,
+                color = chartColor,
                 startAngle = -90f,
                 sweepAngle = sweepAngle,
                 useCenter = false,

@@ -51,6 +51,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.*
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -350,7 +351,7 @@ fun MarkAttendanceDialog(
                 onClick = onDeleteMain,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Clear All") }
+            ) { Text("Clear Day") }
         },
         dismissButton = { 
             TextButton(
@@ -510,8 +511,8 @@ fun AttendanceCalendar(
     onDayClick: (LocalDate) -> Unit
 ) {
     val currentMonth = remember { YearMonth.now() }
-    val startMonth = remember { currentMonth.minusMonths(12) }
-    val endMonth = remember { currentMonth.plusMonths(12) }
+    val startMonth = remember { currentMonth.minusMonths(24) }
+    val endMonth = remember { currentMonth.plusMonths(24) }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
     val state = rememberCalendarState(
@@ -521,12 +522,37 @@ fun AttendanceCalendar(
         firstDayOfWeek = firstDayOfWeek
     )
 
+    val coroutineScope = rememberCoroutineScope()
+
     Column {
-        Text(
-            text = state.firstVisibleMonth.yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + state.firstVisibleMonth.yearMonth.year,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = {
+                coroutineScope.launch {
+                    state.animateScrollToMonth(state.firstVisibleMonth.yearMonth.minusMonths(1))
+                }
+            }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Month")
+            }
+
+            Text(
+                text = state.firstVisibleMonth.yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + state.firstVisibleMonth.yearMonth.year,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            IconButton(onClick = {
+                coroutineScope.launch {
+                    state.animateScrollToMonth(state.firstVisibleMonth.yearMonth.plusMonths(1))
+                }
+            }) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next Month")
+            }
+        }
+        
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
@@ -543,15 +569,8 @@ fun Day(
     records: List<AttendanceRecord>,
     onClick: (LocalDate) -> Unit
 ) {
-    val status = remember(records) {
-        when {
-            records.any { it.type == RecordType.HOLIDAY } -> DayStatus.Holiday
-            records.any { it.type == RecordType.CANCELLED } -> DayStatus.Cancelled
-            records.any { it.isPresent } -> DayStatus.Present
-            records.isNotEmpty() -> DayStatus.Absent
-            else -> DayStatus.None
-        }
-    }
+    val isHoliday = records.any { it.type == RecordType.HOLIDAY }
+    val hasRecords = records.any { it.type != RecordType.HOLIDAY }
 
     Box(
         modifier = Modifier
@@ -559,8 +578,8 @@ fun Day(
             .padding(2.dp)
             .clip(CircleShape)
             .background(
-                when (status) {
-                    DayStatus.Holiday -> HolidayYellow.copy(alpha = 0.2f)
+                when {
+                    isHoliday -> HolidayYellow.copy(alpha = 0.2f)
                     else -> Color.Transparent
                 }
             )
@@ -573,29 +592,30 @@ fun Day(
                 style = MaterialTheme.typography.bodyMedium,
                 color = when {
                     day.position != DayPosition.MonthDate -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    status == DayStatus.Holiday -> HolidayYellow
+                    isHoliday -> HolidayYellow
                     else -> MaterialTheme.colorScheme.onSurface
                 }
             )
-                            if (status != DayStatus.None && status != DayStatus.Holiday) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when (status) {
-                                DayStatus.Present -> SuccessGreen
-                                DayStatus.Absent -> ErrorRed
-                                DayStatus.Cancelled -> MaterialTheme.colorScheme.outline
-                                else -> Color.Transparent
-                            }
+            if (hasRecords) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    records.filter { it.type != RecordType.HOLIDAY }.take(3).forEach { record ->
+                        val dotColor = when {
+                            record.type == RecordType.CANCELLED -> MaterialTheme.colorScheme.outline
+                            record.isPresent -> SuccessGreen
+                            else -> ErrorRed
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
                         )
-                )
+                    }
+                }
             }
         }
     }
-}
-
-enum class DayStatus {
-    Present, Absent, Cancelled, Holiday, None
 }

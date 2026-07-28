@@ -49,7 +49,10 @@ fun WeeklyScheduleScreen(navController: NavController, appViewModel: AppViewMode
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                val daysOfWeek = (1..7).toList() // Sunday to Saturday
+                val daysOfWeek = listOf(
+                    Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY,
+                    Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY, Calendar.SUNDAY
+                )
                 daysOfWeek.forEach { dayOfWeek ->
                     val dayName = getDayName(dayOfWeek)
                     val schedulesForDay = weeklySchedule[dayOfWeek] ?: emptyList<ScheduleWithSubject>()

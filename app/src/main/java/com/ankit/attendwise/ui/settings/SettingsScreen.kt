@@ -143,11 +143,21 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                     title = "Battery Optimization",
                     subtitle = "Required for reliable notifications",
                     onClick = {
-                        val intent = Intent().apply {
-                            action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-                            data = Uri.parse("package:${context.packageName}")
+                        try {
+                            val intent = Intent().apply {
+                                action = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            // Fallback to general battery settings
+                            try {
+                                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                context.startActivity(intent)
+                            } catch (e2: Exception) {
+                                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                            }
                         }
-                        context.startActivity(intent)
                     }
                 )
                 SystemPermissionItem(
@@ -155,11 +165,15 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                     subtitle = "Ensure reminders fire on time",
                     onClick = {
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                            val intent = Intent().apply {
-                                action = Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
-                                data = Uri.parse("package:${context.packageName}")
+                            try {
+                                val intent = Intent().apply {
+                                    action = Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                context.startActivity(Intent(Settings.ACTION_SETTINGS))
                             }
-                            context.startActivity(intent)
                         }
                     }
                 )

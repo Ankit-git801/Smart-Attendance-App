@@ -1,4 +1,4 @@
-# 📱 Smart Attendance App ✨📚
+# 📱 AttendWise App ✨📚
 
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg)](https://kotlinlang.org/)
