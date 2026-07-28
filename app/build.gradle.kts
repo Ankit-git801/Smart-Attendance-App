@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ankit.smartattendance"
+    namespace = "com.ankit.attendwise"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.ankit.smartattendance"
+        applicationId = "com.ankit.attendwise"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

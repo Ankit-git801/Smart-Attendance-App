@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SmartAttendance"
+rootProject.name = "AttendWise"
 include(":app")
