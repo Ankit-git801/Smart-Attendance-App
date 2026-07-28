@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ankit.smartattendance.ui.calendar
 
 import androidx.compose.foundation.background
@@ -6,9 +8,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.ankit.smartattendance.data.AttendanceRecord
 import com.ankit.smartattendance.data.RecordType
@@ -28,127 +32,194 @@ import com.ankit.smartattendance.ui.theme.HolidayYellow
 import com.ankit.smartattendance.viewmodel.AppViewModel
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
-import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import java.util.*
+import java.util.Locale
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
-    val allRecords by appViewModel.allAttendanceRecords.collectAsState(initial = emptyList())
+    val allRecords by appViewModel.allAttendanceRecords.collectAsStateWithLifecycle()
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-    val holidayConfirmationDate by appViewModel.showHolidayDialog.collectAsState()
-    val haptic = LocalHapticFeedback.current
+    var showDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf<String?>(null) }
+    var showHolidayConfirmation by remember { mutableStateOf(false) }
 
-    if (holidayConfirmationDate != null) {
-        HolidayConfirmationDialog(
-            onConfirm = { 
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                appViewModel.onHolidayToggleConfirmed() 
-            },
-            onDismiss = { appViewModel.onHolidayToggleDismissed() }
-        )
+    val recordsForSelectedDate by if (selectedDate != null) {
+        appViewModel.getRecordsForDate(selectedDate!!).collectAsStateWithLifecycle(initialValue = emptyList())
+    } else {
+        remember { mutableStateOf(emptyList<AttendanceRecordWithSubject>()) }
     }
 
-    selectedDate?.let { date ->
-        val recordsForDay by appViewModel.getRecordsForDate(date).collectAsState(initial = emptyList())
-        val isHoliday = allRecords.any { it.date == date.toEpochDay() && it.type == RecordType.HOLIDAY }
-
-        DayDetailDialog(
-            date = date,
-            recordsForDay = recordsForDay,
-            isHoliday = isHoliday,
-            onDismiss = { selectedDate = null },
-            onSubjectClick = { subjectId ->
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                selectedDate = null
-                navController.navigate("subject_detail/$subjectId")
+    if (showDeleteConfirmation != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = null },
+            title = { Text("Delete Record") },
+            text = { Text("Are you sure you want to delete this attendance record? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val recordId = showDeleteConfirmation!!
+                        val subjectId = recordsForSelectedDate.find { it.attendanceRecord.id == recordId }?.attendanceRecord?.subjectId ?: ""
+                        appViewModel.deleteAttendanceRecordById(recordId, subjectId)
+                        showDeleteConfirmation = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Delete") }
             },
-            onHolidayToggle = { 
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                appViewModel.onHolidayToggleRequested(date) 
+            dismissButton = { 
+                TextButton(
+                    onClick = { showDeleteConfirmation = null },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Cancel") } 
             }
         )
     }
 
+    if (showHolidayConfirmation && selectedDate != null) {
+        HolidayConfirmationDialog(
+            onConfirm = {
+                appViewModel.onHolidayToggleConfirmed()
+                showHolidayConfirmation = false
+                showDialog = false
+            },
+            onDismiss = { showHolidayConfirmation = false }
+        )
+    }
+
     Scaffold(
-        topBar = { 
-            TopAppBar(
-                title = { Text("Calendar", fontWeight = FontWeight.Bold) }
-            ) 
+        topBar = {
+            TopAppBar(title = { Text("Attendance Calendar") })
         }
     ) { paddingValues ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
+        Box(modifier = Modifier.padding(paddingValues)) {
             AttendanceCalendar(
                 allRecords = allRecords,
-                onDayClick = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    selectedDate = it 
+                onDayClick = { date ->
+                    selectedDate = date
+                    showDialog = true
                 }
             )
+
+            if (showDialog && selectedDate != null) {
+                val holiday = allRecords.find { it.date == selectedDate!!.toEpochDay() && it.type == RecordType.HOLIDAY }
+                val isCurrentlyHoliday = holiday != null
+
+                DayDetailDialog(
+                    date = selectedDate!!,
+                    records = recordsForSelectedDate,
+                    isHoliday = isCurrentlyHoliday,
+                    onDismiss = { showDialog = false },
+                    onDeleteRecord = { recordId ->
+                        showDeleteConfirmation = recordId
+                    },
+                    onToggleHoliday = {
+                        if (isCurrentlyHoliday) {
+                            appViewModel.onHolidayToggleRequested(selectedDate!!)
+                            showDialog = false
+                        } else {
+                            appViewModel.onHolidayToggleRequested(selectedDate!!) // This sets the _showHolidayDialog value
+                            showHolidayConfirmation = true
+                        }
+                    }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun DayDetailDialog(
+fun DayDetailDialog(
     date: LocalDate,
-    recordsForDay: List<AttendanceRecordWithSubject>,
+    records: List<AttendanceRecordWithSubject>,
     isHoliday: Boolean,
     onDismiss: () -> Unit,
-    onSubjectClick: (Long) -> Unit,
-    onHolidayToggle: () -> Unit
+    onDeleteRecord: (String) -> Unit,
+    onToggleHoliday: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(date.format(DateTimeFormatter.ofPattern("EEEE, MMMM d"))) },
+        title = {
+            Text(
+                text = date.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (isHoliday) {
-                    Text("This day is marked as a holiday. All attendance for this day is ignored.")
-                } else if (recordsForDay.isEmpty()) {
-                    Text("No classes were attended or missed on this day.")
-                } else {
-                    recordsForDay.forEach { recordItem ->
-                        val color = try {
-                            Color(android.graphics.Color.parseColor(recordItem.subjectColor ?: "#808080"))
-                        } catch (e: Exception) {
-                            Color.Gray
-                        }
+                    Text(
+                        "Public Holiday / No Classes",
+                        color = HolidayYellow,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                if (records.isEmpty() && !isHoliday) {
+                    Text("No records for this day")
+                }
+
+                records.forEach { recordWithSubject ->
+                    val record = recordWithSubject.attendanceRecord
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
+                    ) {
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSubjectClick(recordItem.attendanceRecord.subjectId) }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(12.dp)
+                                .fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(
-                                Icons.Default.Circle,
-                                contentDescription = null,
-                                tint = color,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                recordItem.subjectName ?: "Unknown Subject",
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                if (recordItem.attendanceRecord.isPresent) "Present" else "Absent",
-                                color = if (recordItem.attendanceRecord.isPresent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = recordWithSubject.subjectName ?: "Unknown",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                val statusText = when {
+                                    record.type == RecordType.CANCELLED -> "Cancelled"
+                                    record.isPresent -> "Present"
+                                    else -> "Absent"
+                                }
+                                val statusColor = when {
+                                    record.type == RecordType.CANCELLED -> MaterialTheme.colorScheme.outline
+                                    record.isPresent -> Color(0xFF4CAF50)
+                                    else -> MaterialTheme.colorScheme.error
+                                }
+                                Text(
+                                    text = statusText,
+                                    color = statusColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                if (record.note.isNotEmpty()) {
+                                    Text(
+                                        text = record.note,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { onDeleteRecord(record.id) }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
@@ -156,39 +227,45 @@ private fun DayDetailDialog(
         },
         confirmButton = {
             Button(
-                onClick = {
-                    onHolidayToggle()
-                    onDismiss()
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isHoliday) MaterialTheme.colorScheme.secondaryContainer else HolidayYellow
-                )
+                onClick = onToggleHoliday,
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text(if (isHoliday) "Unmark as Holiday" else "Mark as Holiday")
+                Text(if (isHoliday) "Remove Holiday" else "Mark as Holiday")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Cancel")
             }
         }
     )
 }
 
 @Composable
-fun HolidayConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun HolidayConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Mark as Holiday?") },
-        text = { Text("Marking this day as a holiday will delete all existing attendance records for this day and prevent future notifications. Are you sure?") },
+        text = { Text("This will remove all attendance records for this date. Do you want to proceed?") },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = HolidayYellow)
-            ) { Text("Confirm") }
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Proceed")
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Text("Cancel")
             }
         }
@@ -212,21 +289,46 @@ fun AttendanceCalendar(
         firstDayOfWeek = firstDayOfWeek
     )
 
-    // Optimization: Group records by date once
     val recordsByDate = remember(allRecords) {
         allRecords.groupBy { it.date }
     }
 
+    val coroutineScope = rememberCoroutineScope()
+
     Column {
         val visibleMonth = state.firstVisibleMonth.yearMonth
-        Text(
-            text = "${visibleMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${visibleMonth.year}",
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
+        
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp)
-        )
+                .padding(vertical = 8.dp, horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = {
+                coroutineScope.launch {
+                    state.animateScrollToMonth(state.firstVisibleMonth.yearMonth.minusMonths(1))
+                }
+            }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Month")
+            }
+
+            Text(
+                text = "${visibleMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${visibleMonth.year}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            IconButton(onClick = {
+                coroutineScope.launch {
+                    state.animateScrollToMonth(state.firstVisibleMonth.yearMonth.plusMonths(1))
+                }
+            }) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Next Month")
+            }
+        }
+        
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
@@ -238,43 +340,54 @@ fun AttendanceCalendar(
 }
 
 @Composable
-private fun Day(
+fun Day(
     date: LocalDate,
-    recordsForDay: List<AttendanceRecord>,
-    onDayClick: (LocalDate) -> Unit
+    records: List<AttendanceRecord>,
+    onClick: (LocalDate) -> Unit
 ) {
-    val isToday = date == LocalDate.now()
-
-    val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
-    val hasAttendance = recordsForDay.any { it.type != RecordType.HOLIDAY }
-
-    val dayBackgroundColor = when {
-        isHoliday -> HolidayYellow.copy(alpha = 0.5f)
-        hasAttendance -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-        else -> Color.Transparent
-    }
+    val isHoliday = records.any { it.type == RecordType.HOLIDAY }
+    val hasRecords = records.any { it.type != RecordType.HOLIDAY }
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .padding(4.dp)
+            .padding(2.dp)
             .clip(CircleShape)
-            .background(color = dayBackgroundColor)
-            .border(
-                width = if (isToday) 2.dp else 0.dp,
-                color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
-                shape = CircleShape
+            .background(
+                when {
+                    isHoliday -> HolidayYellow.copy(alpha = 0.2f)
+                    else -> Color.Transparent
+                }
             )
-            .clickable { onDayClick(date) },
+            .clickable { onClick(date) },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = date.dayOfMonth.toString(),
-            color = when {
-                isToday -> MaterialTheme.colorScheme.primary
-                else -> LocalContentColor.current
-            },
-            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isHoliday) HolidayYellow else MaterialTheme.colorScheme.onSurface
+            )
+            if (hasRecords) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    records.filter { it.type != RecordType.HOLIDAY }.take(3).forEach { record ->
+                        val dotColor = when {
+                            record.type == RecordType.CANCELLED -> MaterialTheme.colorScheme.outline
+                            record.isPresent -> Color(0xFF4CAF50)
+                            else -> MaterialTheme.colorScheme.error
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -12,10 +12,10 @@ class NotificationDismissReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         Log.d(TAG, "Notification dismissed, re-posting...")
 
-        val subjectId = intent.getLongExtra("subject_id", -1L)
-        val scheduleId = intent.getLongExtra("schedule_id", -1L)
+        val subjectId = intent.getStringExtra("subject_id") ?: ""
+        val scheduleId = intent.getStringExtra("schedule_id") ?: ""
 
-        if (subjectId != -1L && scheduleId != -1L) {
+        if (subjectId.isNotEmpty() && scheduleId.isNotEmpty()) {
             // Immediately restart the ReminderService to show the notification again.
             val serviceIntent = Intent(context, ReminderService::class.java).apply {
                 putExtra("subject_id", subjectId)

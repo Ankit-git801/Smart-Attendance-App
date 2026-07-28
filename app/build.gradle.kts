@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -54,6 +55,7 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -63,6 +65,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
+
+    // Splash Screen API
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // NEW: Haze library for Glassmorphism effect
     implementation("dev.chrisbanes.haze:haze-jetpack-compose:0.5.4")
@@ -83,6 +88,13 @@ dependencies {
 
     // Calendar Library
     implementation("com.kizitonwose.calendar:compose:2.6.1")
+
+    // Firebase
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // Testing
     testImplementation(libs.junit)

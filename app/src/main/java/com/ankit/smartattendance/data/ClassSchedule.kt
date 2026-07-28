@@ -3,6 +3,7 @@ package com.ankit.smartattendance.data
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 @Entity(
     tableName = "class_schedules",
@@ -16,12 +17,13 @@ import androidx.room.PrimaryKey
     ]
 )
 data class ClassSchedule(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
-    var subjectId: Long,
-    val dayOfWeek: Int, // 1 for Sunday, 2 for Monday, etc.
-    val startHour: Int,
-    val startMinute: Int,
-    val endHour: Int,     // <-- ADDED THIS LINE
-    val endMinute: Int    // <-- ADDED THIS LINE
+    @PrimaryKey
+    val id: String = java.util.UUID.randomUUID().toString(),
+    var subjectId: String = "",
+    val dayOfWeek: Int = 0,
+    val startHour: Int = 0,
+    val startMinute: Int = 0,
+    val endHour: Int = 0,
+    val endMinute: Int = 0,
+    val lastUpdated: Long = System.currentTimeMillis()
 )

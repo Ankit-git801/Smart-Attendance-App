@@ -10,7 +10,6 @@ import com.ankit.smartattendance.utils.AlarmScheduler
 import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -20,10 +19,10 @@ class ReminderService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "ReminderService started")
 
-        val subjectId = intent?.getLongExtra("subject_id", -1L) ?: -1L
-        val scheduleId = intent?.getLongExtra("schedule_id", -1L) ?: -1L
+        val subjectId = intent?.getStringExtra("subject_id") ?: ""
+        val scheduleId = intent?.getStringExtra("schedule_id") ?: ""
 
-        if (subjectId != -1L && scheduleId != -1L) {
+        if (subjectId.isNotEmpty() && scheduleId.isNotEmpty()) {
             val dao = AppDatabase.getDatabase(applicationContext).attendanceDao()
             
             CoroutineScope(Dispatchers.IO).launch {
@@ -32,9 +31,9 @@ class ReminderService : Service() {
                     val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
                     
                     val today = LocalDate.now().toEpochDay()
-                    val allRecords = dao.getAllAttendanceRecords().first()
-                    val isHoliday = allRecords.any { it.date == today && it.type == RecordType.HOLIDAY }
-                    val isAlreadyMarked = allRecords.any { it.date == today && it.scheduleId == scheduleId && (it.type == RecordType.CLASS || it.type == RecordType.CANCELLED) }
+                    val todayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
+                    val isHoliday = todayRecords.any { it.type == RecordType.HOLIDAY }
+                    val isAlreadyMarked = todayRecords.any { it.scheduleId == scheduleId && (it.type == RecordType.CLASS || it.type == RecordType.CANCELLED) }
 
                     if (subject != null && schedule != null) {
                         // FIX: Always reschedule for next week as soon as this alarm triggers
@@ -47,7 +46,7 @@ class ReminderService : Service() {
                                 subject,
                                 schedule
                             )
-                            startForeground(schedule.id.toInt(), notification)
+                            startForeground(schedule.id.hashCode(), notification)
                             Log.d(TAG, "Foreground notification started successfully")
                         } else {
                             Log.d(TAG, "Skipping notification (holiday or already marked), but rescheduled next alarm")

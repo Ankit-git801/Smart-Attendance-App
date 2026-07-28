@@ -10,12 +10,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Login
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -25,19 +24,48 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ankit.smartattendance.ui.settings.AuthDialog
 import com.ankit.smartattendance.ui.theme.PoppinsFamily
 import com.ankit.smartattendance.viewmodel.AppViewModel
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
+
+enum class OnboardingStep {
+    WELCOME, NAME_INPUT
+}
 
 @Composable
 fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
+    var currentStep by remember { mutableStateOf(OnboardingStep.WELCOME) }
     var name by remember { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
     val visible = remember { mutableStateOf(false) }
+    var showAuthDialog by remember { mutableStateOf(false) }
+    var initialIsSignUp by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         delay(300)
         visible.value = true
+    }
+
+    if (showAuthDialog) {
+        AuthDialog(
+            onDismiss = { showAuthDialog = false },
+            appViewModel = appViewModel,
+            initialIsSignUp = initialIsSignUp,
+            onResult = { success, error ->
+                if (success) {
+                    showAuthDialog = false
+                    if (initialIsSignUp) {
+                        currentStep = OnboardingStep.NAME_INPUT
+                    } else {
+                        // For sign in, we assume name is restored or they can set it later in settings
+                        appViewModel.skipOnboarding()
+                        onComplete()
+                    }
+                }
+            }
+        )
     }
 
     Box(
@@ -66,84 +94,123 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            AnimatedVisibility(
-                visible = visible.value,
-                enter = fadeIn(tween(1000, 200)) + slideInVertically(tween(1000, 200)) { 40 }
-            ) {
-                Text(
-                    text = "Welcome to\nSmart Attendance",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    fontFamily = PoppinsFamily,
-                    lineHeight = 40.sp
-                )
-            }
+            AnimatedContent(
+                targetState = currentStep,
+                transitionSpec = {
+                    fadeIn(tween(500)) togetherWith fadeOut(tween(500))
+                },
+                label = "onboarding_step"
+            ) { step ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    when (step) {
+                        OnboardingStep.WELCOME -> {
+                            Text(
+                                text = "Welcome to\nSmart Attendance",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                fontFamily = PoppinsFamily,
+                                lineHeight = 40.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Stay organized and never miss a target. Choose how you want to start.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(48.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { 
+                                    initialIsSignUp = true
+                                    showAuthDialog = true 
+                                },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(24.dp)
+                            ) {
+                                Text("Sign Up", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            }
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
 
-            AnimatedVisibility(
-                visible = visible.value,
-                enter = fadeIn(tween(1000, 400)) + slideInVertically(tween(1000, 400)) { 40 }
-            ) {
-                Text(
-                    text = "Let's personalize your experience. What should we call you?",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+                            OutlinedButton(
+                                onClick = { 
+                                    initialIsSignUp = false
+                                    showAuthDialog = true 
+                                },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(24.dp)
+                            ) {
+                                Icon(Icons.Default.Login, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sign In", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            }
 
-            Spacer(modifier = Modifier.height(48.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
 
-            AnimatedVisibility(
-                visible = visible.value,
-                enter = fadeIn(tween(1000, 600)) + slideInVertically(tween(1000, 600)) { 40 }
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Enter Your Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = {
-                        if (name.isNotBlank()) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            appViewModel.completeOnboarding(name)
-                            onComplete()
+                            TextButton(
+                                onClick = { currentStep = OnboardingStep.NAME_INPUT },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Sign Up Later (Offline Mode)", style = MaterialTheme.typography.bodyMedium)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
                         }
-                    })
-                )
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            AnimatedVisibility(
-                visible = visible.value,
-                enter = fadeIn(tween(1000, 800))
-            ) {
-                Button(
-                    onClick = {
-                        if (name.isNotBlank()) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            appViewModel.completeOnboarding(name)
-                            onComplete()
+                        OnboardingStep.NAME_INPUT -> {
+                            Text(
+                                text = "Personalize Your App",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                fontFamily = PoppinsFamily
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "What should we call you?",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(32.dp))
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Enter Your Name") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                keyboardOptions = KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.Words,
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(onDone = {
+                                    if (name.isNotBlank()) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        appViewModel.completeOnboarding(name)
+                                        onComplete()
+                                    }
+                                })
+                            )
+                            Spacer(modifier = Modifier.height(32.dp))
+                            Button(
+                                onClick = {
+                                    if (name.isNotBlank()) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        appViewModel.completeOnboarding(name)
+                                        onComplete()
+                                    }
+                                },
+                                enabled = name.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(24.dp)
+                            ) {
+                                Text("Get Started", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            }
                         }
-                    },
-                    enabled = name.isNotBlank(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("Get Started", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Default.ArrowForward, contentDescription = null)
+                    }
                 }
             }
         }

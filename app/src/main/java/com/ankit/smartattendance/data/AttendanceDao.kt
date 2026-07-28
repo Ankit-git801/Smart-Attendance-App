@@ -19,7 +19,7 @@ interface AttendanceDao {
     fun getAllSubjects(): Flow<List<Subject>>
 
     @Query("SELECT * FROM subjects WHERE id = :subjectId")
-    suspend fun getSubjectById(subjectId: Long): Subject?
+    suspend fun getSubjectById(subjectId: String): Subject?
 
     @Query("SELECT COUNT(*) FROM subjects")
     suspend fun getSubjectCount(): Int
@@ -32,14 +32,17 @@ interface AttendanceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedule(schedule: ClassSchedule)
 
+    @Delete
+    suspend fun deleteSchedule(schedule: ClassSchedule)
+
     @Query("SELECT * FROM class_schedules")
     fun getAllSchedules(): Flow<List<ClassSchedule>>
 
     @Query("SELECT * FROM class_schedules WHERE subjectId = :subjectId")
-    suspend fun getSchedulesForSubject(subjectId: Long): List<ClassSchedule>
+    suspend fun getSchedulesForSubject(subjectId: String): List<ClassSchedule>
 
     @Query("DELETE FROM class_schedules WHERE subjectId = :subjectId")
-    suspend fun deleteSchedulesForSubject(subjectId: Long)
+    suspend fun deleteSchedulesForSubject(subjectId: String)
 
     @Query("SELECT * FROM class_schedules WHERE dayOfWeek = :dayOfWeek")
     fun getSchedulesForDay(dayOfWeek: Int): Flow<List<ClassSchedule>>
@@ -61,17 +64,20 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance_records")
     fun getAllAttendanceRecords(): Flow<List<AttendanceRecord>>
 
+    @Query("SELECT * FROM attendance_records WHERE id = :id")
+    suspend fun getAttendanceRecordById(id: String): AttendanceRecord?
+
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId ORDER BY date DESC")
-    fun getAttendanceRecordsForSubject(subjectId: Long): Flow<List<AttendanceRecord>>
+    fun getAttendanceRecordsForSubject(subjectId: String): Flow<List<AttendanceRecord>>
 
     @Query("SELECT * FROM attendance_records WHERE scheduleId = :scheduleId AND date = :date")
-    suspend fun getRecordByScheduleIdAndDate(scheduleId: Long, date: Long): AttendanceRecord?
+    suspend fun getRecordByScheduleIdAndDate(scheduleId: String, date: Long): AttendanceRecord?
 
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type = 'MANUAL' LIMIT 1")
-    suspend fun getManualRecordForDateAndSubject(subjectId: Long, date: Long): AttendanceRecord?
+    suspend fun getManualRecordForDateAndSubject(subjectId: String, date: Long): AttendanceRecord?
 
     @Query("SELECT * FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type != 'HOLIDAY'")
-    suspend fun getAttendanceRecordsForSubjectOnDate(subjectId: Long, date: Long): List<AttendanceRecord>
+    suspend fun getAttendanceRecordsForSubjectOnDate(subjectId: String, date: Long): List<AttendanceRecord>
 
     @Query("DELETE FROM attendance_records WHERE date = :date AND type = 'HOLIDAY'")
     suspend fun deleteHolidayOnDate(date: Long)
@@ -79,14 +85,21 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE date = :date AND type != 'HOLIDAY'")
     suspend fun deleteAttendanceRecordsOnDate(date: Long)
 
+    @Query("SELECT * FROM attendance_records WHERE date = :date")
+    suspend fun getAllAttendanceRecordsOnDateNow(date: Long): List<AttendanceRecord>
+
+    @Query("SELECT * FROM attendance_records WHERE date = :date AND type != 'HOLIDAY'")
+    suspend fun getAttendanceRecordsOnDateNow(date: Long): List<AttendanceRecord>
+
+
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND scheduleId = :scheduleId AND type != 'HOLIDAY'")
-    suspend fun deleteAttendanceRecordBySchedule(subjectId: Long, date: Long, scheduleId: Long)
+    suspend fun deleteAttendanceRecordBySchedule(subjectId: String, date: Long, scheduleId: String)
 
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId AND date = :date AND type != 'HOLIDAY'")
-    suspend fun deleteAttendanceRecordsForSubjectOnDate(subjectId: Long, date: Long)
+    suspend fun deleteAttendanceRecordsForSubjectOnDate(subjectId: String, date: Long)
 
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
-    suspend fun deleteAttendanceRecordsForSubject(subjectId: Long)
+    suspend fun deleteAttendanceRecordsForSubject(subjectId: String)
 
     @Query("DELETE FROM attendance_records")
     suspend fun deleteAllAttendanceRecords()
@@ -100,10 +113,10 @@ interface AttendanceDao {
     suspend fun getTotalPresentOverall(): Int
 
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND (type = 'CLASS' OR type = 'MANUAL')")
-    suspend fun getTotalClassesForSubject(subjectId: Long): Int
+    suspend fun getTotalClassesForSubject(subjectId: String): Int
 
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')")
-    suspend fun getPresentClassesForSubject(subjectId: Long): Int
+    suspend fun getPresentClassesForSubject(subjectId: String): Int
 
     @Transaction
     @Query("""

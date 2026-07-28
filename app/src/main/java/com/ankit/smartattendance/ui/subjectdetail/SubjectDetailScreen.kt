@@ -1,15 +1,17 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ankit.smartattendance.ui.subjectdetail
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -21,51 +23,102 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.ankit.smartattendance.data.*
+import com.ankit.smartattendance.data.AttendanceRecord
+import com.ankit.smartattendance.data.BunkAnalysis
+import com.ankit.smartattendance.data.RecordType
+import com.ankit.smartattendance.data.Subject
 import com.ankit.smartattendance.models.SubjectWithAttendance
 import com.ankit.smartattendance.ui.theme.ErrorRed
 import com.ankit.smartattendance.ui.theme.HolidayYellow
+import com.ankit.smartattendance.ui.theme.PoppinsFamily
 import com.ankit.smartattendance.ui.theme.SuccessGreen
 import com.ankit.smartattendance.viewmodel.AppViewModel
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
+import com.kizitonwose.calendar.core.DayPosition
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewModel: AppViewModel) {
+fun SubjectDetailScreen(subjectId: String, navController: NavController, appViewModel: AppViewModel) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showManualAddDialog by remember { mutableStateOf(false) }
     var showMarkAttendanceDialog by remember { mutableStateOf<LocalDate?>(null) }
-    var bunkAnalysis by remember { mutableStateOf<BunkAnalysis?>(null) }
     val haptic = LocalHapticFeedback.current
 
-    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsStateWithLifecycle()
+    val bunkAnalysisMap by appViewModel.bunkAnalysisMap.collectAsStateWithLifecycle()
     val subjectWithAttendance by remember(subjectsWithAttendance, subjectId) {
         derivedStateOf { subjectsWithAttendance.find { it.subject.id == subjectId } }
     }
 
-    val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId).collectAsState(initial = emptyList())
+    val bunkAnalysis = remember(bunkAnalysisMap, subjectId) { bunkAnalysisMap[subjectId] }
 
-    LaunchedEffect(subjectWithAttendance) {
-        subjectWithAttendance?.let {
-            bunkAnalysis = appViewModel.calculateBunkAnalysis(it.subject.id)
-        }
+    val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId).collectAsStateWithLifecycle(initialValue = emptyList())
+
+    var recordToDelete by remember { mutableStateOf<String?>(null) }
+    var clearAllDateRecords by remember { mutableStateOf<LocalDate?>(null) }
+
+    if (recordToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { recordToDelete = null },
+            title = { Text("Delete Record") },
+            text = { Text("Are you sure you want to delete this attendance record?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        appViewModel.deleteAttendanceRecordById(recordToDelete!!, subjectId)
+                        recordToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Delete") }
+            },
+            dismissButton = { 
+                TextButton(
+                    onClick = { recordToDelete = null },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Cancel") } 
+            }
+        )
+    }
+
+    if (clearAllDateRecords != null) {
+        AlertDialog(
+            onDismissRequest = { clearAllDateRecords = null },
+            title = { Text("Clear Attendance") },
+            text = { Text("Are you sure you want to clear all attendance records for this date?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        appViewModel.deleteAttendanceRecordForDate(subjectId, clearAllDateRecords!!)
+                        clearAllDateRecords = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Clear") }
+            },
+            dismissButton = { 
+                TextButton(
+                    onClick = { clearAllDateRecords = null },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Cancel") } 
+            }
+        )
     }
 
     if (showDeleteDialog) {
@@ -100,8 +153,8 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
             onConfirm = { isPresent ->
                 appViewModel.updateAttendanceRecord(subjectId, date, isPresent)
             },
-            onDeleteMain = { appViewModel.deleteAttendanceRecordForDate(subjectId, date) },
-            onDeleteRecord = { recordId -> appViewModel.deleteAttendanceRecordById(recordId, subjectId) },
+            onDeleteMain = { clearAllDateRecords = date },
+            onDeleteRecord = { recordId -> recordToDelete = recordId },
             onAddExtra = { isPresent -> appViewModel.addExtraClasses(subjectId, date, isPresent, 1) }
         )
     }
@@ -109,109 +162,123 @@ fun SubjectDetailScreen(subjectId: Long, navController: NavController, appViewMo
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(subjectWithAttendance?.subject?.name ?: "Details", fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton({ navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Back") } },
+                title = { Text(subjectWithAttendance?.subject?.name ?: "Subject Details") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 actions = {
-                    IconButton({ showManualAddDialog = true }) { Icon(Icons.Default.PlaylistAdd, "Add Past Records") }
-                    IconButton({ navController.navigate("edit_subject/$subjectId") }) { Icon(Icons.Default.Edit, "Edit") }
-                    IconButton({ showDeleteDialog = true }) { Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error) }
+                    IconButton(onClick = { showManualAddDialog = true }) {
+                        Icon(Icons.Default.PlaylistAdd, contentDescription = "Add Past Records")
+                    }
+                    IconButton(onClick = {
+                        navController.navigate("edit_subject/${subjectId}")
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit")
+                    }
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    }
                 }
             )
         }
     ) { paddingValues ->
-        subjectWithAttendance?.let { swa ->
-            LazyColumn(
-                Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item { AttendanceProgressCard(subjectWithAttendance = swa) }
-                item { AttendanceStatsCard(subjectWithAttendance = swa) }
-                item {
-                    bunkAnalysis?.let { analysis ->
-                        BunkAnalysisCard(analysis = analysis, subject = swa.subject)
-                    }
-                }
-                item {
-                    Text(
-                        "Attendance History",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-                item {
-                    AttendanceCalendar(
-                        records = attendanceRecords,
-                        onDayClick = { date -> showMarkAttendanceDialog = date }
-                    )
-                }
-            }
-        } ?: run {
+        if (subjectWithAttendance == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                AttendanceProgressCard(subjectWithAttendance!!)
+                AttendanceStatsCard(subjectWithAttendance!!)
+                if (bunkAnalysis != null) {
+                    BunkAnalysisCard(bunkAnalysis!!, subjectWithAttendance!!.subject)
+                }
+
+                Text(
+                    "Attendance History",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                AttendanceCalendar(attendanceRecords) { date ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showMarkAttendanceDialog = date
+                }
             }
         }
     }
 }
 
 @Composable
-private fun DeleteConfirmationDialog(subjectName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun DeleteConfirmationDialog(subjectName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delete Subject") },
-        text = { Text("Are you sure you want to delete '$subjectName'? This action is permanent and cannot be undone.") },
+        text = { Text("Are you sure you want to delete '$subjectName'? This will also delete all its attendance records and schedules.") },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(12.dp)
             ) { Text("Delete") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { 
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Cancel") } 
+        }
     )
 }
 
 @Composable
-private fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present: Int, absent: Int) -> Unit) {
+fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present: Int, absent: Int) -> Unit) {
     var presentCount by remember { mutableStateOf("0") }
     var absentCount by remember { mutableStateOf("0") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Past Records") },
+        title = { Text("Add Past Attendance") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Add past attendance records that weren't tracked in the app.")
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Enter the number of classes you've already attended or missed.")
                 OutlinedTextField(
                     value = presentCount,
-                    onValueChange = { if (it.all(Char::isDigit)) presentCount = it },
-                    label = { Text("Present Classes") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    onValueChange = { if (it.all { char -> char.isDigit() }) presentCount = it },
+                    label = { Text("Total Attended (Present)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = absentCount,
-                    onValueChange = { if (it.all(Char::isDigit)) absentCount = it },
-                    label = { Text("Absent Classes") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    onValueChange = { if (it.all { char -> char.isDigit() }) absentCount = it },
+                    label = { Text("Total Missed (Absent)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         },
         confirmButton = {
             Button(
-                onClick = {
-                    val present = presentCount.toIntOrNull() ?: 0
-                    val absent = absentCount.toIntOrNull() ?: 0
-                    if (present > 0 || absent > 0) {
-                        onConfirm(present, absent)
-                    }
-                    onDismiss()
-                }
-            ) { Text("Add") }
+                onClick = { onConfirm(presentCount.toIntOrNull() ?: 0, absentCount.toIntOrNull() ?: 0) },
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Add Records") }
         },
-        dismissButton = { TextButton(onDismiss) { Text("Cancel") } }
+        dismissButton = { 
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Cancel") } 
+        }
     )
 }
 
@@ -222,229 +289,229 @@ fun MarkAttendanceDialog(
     onDismiss: () -> Unit,
     onConfirm: (Boolean) -> Unit,
     onDeleteMain: () -> Unit,
-    onDeleteRecord: (Long) -> Unit,
+    onDeleteRecord: (String) -> Unit,
     onAddExtra: (Boolean) -> Unit
 ) {
-    val formatter = DateTimeFormatter.ofPattern("EEEE, MMMM d")
-    val hasMainRecord = recordsForDay.any { (it.type == RecordType.CLASS || it.type == RecordType.CANCELLED) || (it.type == RecordType.MANUAL && it.scheduleId != 0L && it.scheduleId != -3L) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Attendance") },
+        title = { Text(date.toString(), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    date.format(formatter),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                // Main attendance actions
-                AttendanceActionRow(Icons.Default.CheckCircle, "Mark as Present", onClick = {
-                    onConfirm(true)
-                    onDismiss()
-                })
-                AttendanceActionRow(Icons.Default.Cancel, "Mark as Absent", onClick = {
-                    onConfirm(false)
-                    onDismiss()
-                })
-                if(hasMainRecord) {
-                    AttendanceActionRow(Icons.Default.DeleteOutline, "Clear Main Attendance", onClick = {
-                        onDeleteMain()
-                        onDismiss()
-                    }, isDestructive = true)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (recordsForDay.isEmpty()) {
+                    Text("No attendance marked for this day.")
+                } else {
+                    recordsForDay.forEach { record ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                val status = when {
+                                    record.type == RecordType.CANCELLED -> "Cancelled"
+                                    record.isPresent -> "Present"
+                                    else -> "Absent"
+                                }
+                                val color = when {
+                                    record.type == RecordType.CANCELLED -> MaterialTheme.colorScheme.outline
+                                    record.isPresent -> SuccessGreen
+                                    else -> ErrorRed
+                                }
+                                Text(status, color = color, fontWeight = FontWeight.Bold)
+                                if (record.note.isNotEmpty()) {
+                                    Text(record.note, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            IconButton(onClick = { onDeleteRecord(record.id) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
                 }
 
-                Divider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                // Extra class actions
-                AttendanceActionRow(Icons.Default.Add, "Add Extra Present", onClick = {
-                    onAddExtra(true)
-                    onDismiss()
-                })
-                AttendanceActionRow(Icons.Default.Remove, "Add Extra Absent", onClick = {
-                    onAddExtra(false)
-                    onDismiss()
-                })
-
-                // List extra classes for deletion
-                recordsForDay.filter { it.scheduleId == 0L || it.scheduleId == -3L }.forEach { record ->
-                    val status = if (record.isPresent) "Present" else "Absent"
-                    val label = if (record.scheduleId == -3L) "Past $status" else "Extra $status"
-                    AttendanceActionRow(Icons.Default.Delete, "Delete $label", onClick = {
-                        onDeleteRecord(record.id)
-                        onDismiss()
-                    }, isDestructive = true)
-                }
+                Text("Quick Actions", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                AttendanceActionRow(Icons.Default.CheckCircle, "Mark Present", { onConfirm(true); onDismiss() }, true)
+                AttendanceActionRow(Icons.Default.Cancel, "Mark Absent", { onConfirm(false); onDismiss() }, false)
+                AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", { onAddExtra(true); onDismiss() }, true)
+                AttendanceActionRow(Icons.Default.RemoveCircle, "Add Extra Class (Absent)", { onAddExtra(false); onDismiss() }, false)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = {
+            Button(
+                onClick = onDeleteMain,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Clear All") }
+        },
+        dismissButton = { 
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Close") } 
+        }
     )
 }
 
-
 @Composable
-private fun AttendanceActionRow(icon: ImageVector, text: String, onClick: () -> Unit, isDestructive: Boolean = false) {
+fun AttendanceActionRow(icon: ImageVector, label: String, onClick: () -> Unit, isPositive: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = text,
-            tint = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Icon(icon, contentDescription = null, tint = if (isPositive) SuccessGreen else ErrorRed)
         Spacer(Modifier.width(16.dp))
-        Text(text, color = if (isDestructive) MaterialTheme.colorScheme.error else LocalContentColor.current)
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
 @Composable
-private fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
-    val subject = subjectWithAttendance.subject
-    val percentage = subjectWithAttendance.percentage
-    val animatedPercentage by animateFloatAsState(
-        targetValue = percentage.toFloat(),
-        animationSpec = tween(1000), label = ""
-    )
-
-    Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             AnimatedCircularProgress(
-                percentage = animatedPercentage,
-                color = Color(android.graphics.Color.parseColor(subject.color)),
-                radius = 40.dp,
-                strokeWidth = 8.dp
+                progress = subjectWithAttendance.percentage.toFloat() / 100f,
+                color = Color(android.graphics.Color.parseColor(subjectWithAttendance.subject.color)),
+                size = 100.dp,
+                strokeWidth = 10.dp
             )
             Spacer(Modifier.width(24.dp))
             Column {
-                Text(subject.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                Text("Target: ${subject.targetAttendance}%", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = subjectWithAttendance.subject.name,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Target: ${subjectWithAttendance.subject.targetAttendance}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AttendanceStatsCard(subjectWithAttendance: SubjectWithAttendance) {
-    val total = subjectWithAttendance.totalClasses
-    val attended = subjectWithAttendance.presentClasses
-    val missed = total - attended
-
-    Card(modifier = Modifier.fillMaxWidth()) {
+fun AttendanceStatsCard(subjectWithAttendance: SubjectWithAttendance) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(20.dp)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.SpaceAround
         ) {
-            StatItem("Total", total.toString())
-            StatItem("Attended", attended.toString(), SuccessGreen)
-            StatItem("Missed", missed.toString(), ErrorRed)
+            StatItem("Total", subjectWithAttendance.totalClasses.toString(), MaterialTheme.colorScheme.primary)
+            StatItem("Attended", subjectWithAttendance.presentClasses.toString(), SuccessGreen)
+            StatItem("Missed", (subjectWithAttendance.totalClasses - subjectWithAttendance.presentClasses).toString(), ErrorRed)
         }
     }
 }
 
 @Composable
-private fun StatItem(label: String, value: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun StatItem(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, style = MaterialTheme.typography.headlineMedium.copy(color = color))
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = color)
+        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
-    val message: String
-    val contentColor: Color
-
-    when {
-        analysis.classesToAttend > 0 -> {
-            message = if (analysis.classesToAttend == Int.MAX_VALUE) {
-                "It's mathematically impossible to reach your target from your current standing."
-            } else {
-                "You must attend the next ${analysis.classesToAttend} classes to reach your ${subject.targetAttendance}% target."
-            }
-            contentColor = MaterialTheme.colorScheme.error
-        }
+fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
+    val (text, color) = when {
         analysis.classesToBunk > 0 -> {
-            message = "You can afford to bunk the next ${analysis.classesToBunk} classes and still meet your target."
-            contentColor = SuccessGreen
+            "You can bunk ${analysis.classesToBunk} classes while staying above your ${subject.targetAttendance}% target." to SuccessGreen
+        }
+        analysis.classesToAttend > 0 -> {
+            "You must attend the next ${analysis.classesToAttend} classes to reach your ${subject.targetAttendance}% target." to ErrorRed
         }
         else -> {
-            message = "You've met your attendance target. Bunking the next class will put you below the target."
-            contentColor = MaterialTheme.colorScheme.primary
+            "You are exactly on track to meet your ${subject.targetAttendance}% target!" to MaterialTheme.colorScheme.primary
         }
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = contentColor.copy(alpha = 0.1f),
-            contentColor = contentColor
-        )
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Info, contentDescription = "Bunk analysis", modifier = Modifier.size(32.dp))
-            Spacer(Modifier.width(16.dp))
-            Text(message, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            Icon(Icons.Default.Info, contentDescription = "Bunk analysis", tint = color)
+            Spacer(Modifier.width(12.dp))
+            Text(text = text, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.Medium)
         }
     }
 }
 
 @Composable
 fun AnimatedCircularProgress(
-    percentage: Float,
+    progress: Float,
     color: Color,
-    radius: Dp,
+    size: Dp,
     strokeWidth: Dp
 ) {
-    val sweepAngle by animateFloatAsState(
-        targetValue = (360 * percentage / 100),
-        animationSpec = tween(1000), label = ""
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 1000),
+        label = "progress"
     )
 
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
-        Canvas(modifier = Modifier.size(radius * 2)) {
-            drawArc(
-                color = color.copy(alpha = 0.3f),
-                startAngle = -90f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = Stroke(strokeWidth.toPx(), cap = StrokeCap.Round)
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(size)) {
+        Canvas(modifier = Modifier.size(size)) {
+            drawCircle(
+                color = color.copy(alpha = 0.1f),
+                style = Stroke(width = strokeWidth.toPx())
             )
             drawArc(
                 color = color,
                 startAngle = -90f,
-                sweepAngle = sweepAngle,
+                sweepAngle = 360 * animatedProgress,
                 useCenter = false,
-                style = Stroke(strokeWidth.toPx(), cap = StrokeCap.Round)
+                style = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
             )
         }
         Text(
-            text = "${percentage.toInt()}%",
+            text = "${(progress * 100).toInt()}%",
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = color
         )
     }
 }
 
 @Composable
 fun AttendanceCalendar(
-    records: List<AttendanceRecord>,
+    allRecords: List<AttendanceRecord>,
     onDayClick: (LocalDate) -> Unit
 ) {
     val currentMonth = remember { YearMonth.now() }
-    val startMonth = remember { currentMonth.minusMonths(24) }
-    val endMonth = remember { currentMonth.plusMonths(24) }
+    val startMonth = remember { currentMonth.minusMonths(12) }
+    val endMonth = remember { currentMonth.plusMonths(12) }
     val firstDayOfWeek = remember { firstDayOfWeekFromLocale() }
 
     val state = rememberCalendarState(
@@ -455,112 +522,80 @@ fun AttendanceCalendar(
     )
 
     Column {
-        val visibleMonth = state.firstVisibleMonth.yearMonth
         Text(
-            text = "${visibleMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${visibleMonth.year}",
+            text = state.firstVisibleMonth.yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + state.firstVisibleMonth.yearMonth.year,
             style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp)
+            modifier = Modifier.padding(vertical = 8.dp)
         )
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
-                Day(day, records, onDayClick)
+                val dayRecords = allRecords.filter { it.date == day.date.toEpochDay() }
+                Day(day, dayRecords, onDayClick)
             }
         )
     }
 }
 
 @Composable
-private fun Day(
+fun Day(
     day: CalendarDay,
     records: List<AttendanceRecord>,
-    onDayClick: (LocalDate) -> Unit
+    onClick: (LocalDate) -> Unit
 ) {
-    val recordsForDay = remember(day.date, records) {
-        records.filter { it.date == day.date.toEpochDay() }
-    }
-    val isToday = day.date == LocalDate.now()
-
-    val presentCount = recordsForDay.count { it.isPresent && it.type != RecordType.HOLIDAY }
-    val absentCount = recordsForDay.count { !it.isPresent && it.type != RecordType.HOLIDAY && it.type != RecordType.CANCELLED }
-    val isHoliday = recordsForDay.any { it.type == RecordType.HOLIDAY }
-    val isCancelled = recordsForDay.any { it.type == RecordType.CANCELLED }
-
-    val dayBackgroundColor = when {
-        isHoliday -> HolidayYellow.copy(alpha = 0.5f)
-        presentCount > 0 -> SuccessGreen.copy(alpha = 0.3f)
-        absentCount > 0 -> ErrorRed.copy(alpha = 0.3f)
-        isCancelled -> Color.Gray.copy(alpha = 0.3f)
-        else -> Color.Transparent
+    val status = remember(records) {
+        when {
+            records.any { it.type == RecordType.HOLIDAY } -> DayStatus.Holiday
+            records.any { it.type == RecordType.CANCELLED } -> DayStatus.Cancelled
+            records.any { it.isPresent } -> DayStatus.Present
+            records.isNotEmpty() -> DayStatus.Absent
+            else -> DayStatus.None
+        }
     }
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .padding(4.dp)
+            .padding(2.dp)
             .clip(CircleShape)
-            .background(color = dayBackgroundColor)
-            .border(
-                width = if (isToday) 2.dp else 0.dp,
-                color = if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
-                shape = CircleShape
+            .background(
+                when (status) {
+                    DayStatus.Holiday -> HolidayYellow.copy(alpha = 0.2f)
+                    else -> Color.Transparent
+                }
             )
-            .clickable { onDayClick(day.date) },
+            .clickable(enabled = day.position == DayPosition.MonthDate) { onClick(day.date) },
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Day Number
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = day.date.dayOfMonth.toString(),
+                style = MaterialTheme.typography.bodyMedium,
                 color = when {
-                    isToday -> MaterialTheme.colorScheme.primary
-                    else -> LocalContentColor.current
-                },
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                fontSize = 15.sp,
-                lineHeight = 15.sp
-            )
-
-            // Attendance counts directly below
-            if (!isHoliday && (presentCount > 0 || absentCount > 0)) {
-                Row(
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 1.dp)
-                ) {
-                    if (presentCount > 0) {
-                        Text(
-                            text = presentCount.toString(),
-                            color = SuccessGreen,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            lineHeight = 10.sp
-                        )
-                    }
-                    if (presentCount > 0 && absentCount > 0) {
-                        Spacer(Modifier.width(3.dp))
-                    }
-                    if (absentCount > 0) {
-                        Text(
-                            text = absentCount.toString(),
-                            color = ErrorRed,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            lineHeight = 10.sp
-                        )
-                    }
+                    day.position != DayPosition.MonthDate -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    status == DayStatus.Holiday -> HolidayYellow
+                    else -> MaterialTheme.colorScheme.onSurface
                 }
+            )
+            if (status != DayStatus.None && status != DayStatus.Holiday) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when (status) {
+                                DayStatus.Present -> SuccessGreen
+                                DayStatus.Absent -> ErrorRed
+                                DayStatus.Cancelled -> MaterialTheme.colorScheme.outline
+                                else -> Color.Transparent
+                            }
+                        )
+                )
             }
         }
     }
 }
 
-private enum class DayStatus {
+enum class DayStatus {
     Present, Absent, Cancelled, Holiday, None
 }

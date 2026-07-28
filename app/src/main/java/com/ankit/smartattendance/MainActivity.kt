@@ -13,6 +13,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -64,13 +66,20 @@ import com.google.accompanist.permissions.rememberPermissionState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         NotificationHelper.createNotificationChannel(this)
 
         setContent {
             val appViewModel: AppViewModel = viewModel()
-            val theme by appViewModel.theme.collectAsState()
+            
+            // Keep the splash screen on screen until the onboarding state is loaded
+            splashScreen.setKeepOnScreenCondition {
+                appViewModel.isOnboardingComplete.value == null
+            }
+
+            val theme by appViewModel.theme.collectAsStateWithLifecycle()
             val useDarkTheme = when (theme) {
                 "Light" -> false
                 "Dark" -> true
@@ -209,7 +218,9 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val isOnboardingComplete by appViewModel.isOnboardingComplete.collectAsState()
+    val isOnboardingComplete by appViewModel.isOnboardingComplete.collectAsStateWithLifecycle()
+
+    if (isOnboardingComplete == null) return
 
     val topLevelDestinations = listOf(
         BottomNavItem.Home.route,
@@ -222,7 +233,7 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (showBottomBar && isOnboardingComplete) {
+            if (showBottomBar && isOnboardingComplete == true) {
                 BottomNavigationBar(navController = navController)
             }
         },
@@ -231,7 +242,7 @@ fun SmartAttendanceApp(appViewModel: AppViewModel) {
         AppNavigation(
             navController = navController,
             appViewModel = appViewModel,
-            isOnboardingComplete = isOnboardingComplete,
+            isOnboardingComplete = isOnboardingComplete == true,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -277,9 +288,9 @@ fun AppNavigation(
         }
         composable(
             route = "edit_subject/{subjectId}",
-            arguments = listOf(navArgument("subjectId") { type = NavType.LongType })
+            arguments = listOf(navArgument("subjectId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val subjectId = backStackEntry.arguments?.getLong("subjectId") ?: 0L
+            val subjectId = backStackEntry.arguments?.getString("subjectId") ?: ""
             AddSubjectScreen(
                 navController = navController,
                 subjectId = subjectId,
@@ -288,9 +299,9 @@ fun AppNavigation(
         }
         composable(
             route = "subject_detail/{subjectId}",
-            arguments = listOf(navArgument("subjectId") { type = NavType.LongType })
+            arguments = listOf(navArgument("subjectId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val subjectId = backStackEntry.arguments?.getLong("subjectId") ?: 0L
+            val subjectId = backStackEntry.arguments?.getString("subjectId") ?: ""
             SubjectDetailScreen(subjectId, navController, appViewModel)
         }
         composable("weekly_schedule") {

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.ankit.smartattendance.models.AttendanceStatistics
 import com.ankit.smartattendance.models.SubjectWithAttendance
@@ -37,7 +38,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
-    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsState()
+    val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsStateWithLifecycle()
     var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current

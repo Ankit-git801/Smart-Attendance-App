@@ -25,7 +25,7 @@ object AlarmScheduler {
             putExtra("subject_name", subject.name)
         }
 
-        val requestCode = schedule.id.toInt()
+        val requestCode = schedule.id.hashCode()
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,
@@ -71,7 +71,7 @@ object AlarmScheduler {
         val intent = Intent(context, AlarmReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
-            schedule.id.toInt(),
+            schedule.id.hashCode(),
             intent,
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         )

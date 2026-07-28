@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.outlined.EventNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.ankit.smartattendance.models.ScheduleWithSubject
 import com.ankit.smartattendance.viewmodel.AppViewModel
@@ -26,7 +26,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeeklyScheduleScreen(navController: NavController, appViewModel: AppViewModel) {
-    val weeklySchedule by appViewModel.getWeeklySchedule().collectAsState(initial = emptyMap())
+    val weeklySchedule by appViewModel.getWeeklySchedule().collectAsStateWithLifecycle(initialValue = emptyMap<Int, List<ScheduleWithSubject>>())
 
     Scaffold(
         topBar = {
@@ -53,7 +53,7 @@ fun WeeklyScheduleScreen(navController: NavController, appViewModel: AppViewMode
                 val daysOfWeek = (1..7).toList() // Sunday to Saturday
                 daysOfWeek.forEach { dayOfWeek ->
                     val dayName = getDayName(dayOfWeek)
-                    val schedulesForDay = weeklySchedule[dayOfWeek] ?: emptyList()
+                    val schedulesForDay = weeklySchedule[dayOfWeek] ?: emptyList<ScheduleWithSubject>()
 
                     if (schedulesForDay.isNotEmpty()) {
                         item {

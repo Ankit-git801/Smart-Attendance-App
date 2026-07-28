@@ -42,7 +42,7 @@ val predefinedColors = listOf(
 @Composable
 fun AddSubjectScreen(
     navController: NavController,
-    subjectId: Long = 0L,
+    subjectId: String = "",
     appViewModel: AppViewModel
 ) {
     var subjectName by remember { mutableStateOf("") }
@@ -51,7 +51,10 @@ fun AddSubjectScreen(
     var schedules by remember { mutableStateOf<List<UiClassSchedule>>(emptyList()) }
     var showAddScheduleDialog by remember { mutableStateOf(false) }
 
-    val isEditMode = subjectId != 0L
+    var pastPresent by remember { mutableStateOf("0") }
+    var pastAbsent by remember { mutableStateOf("0") }
+
+    val isEditMode = subjectId.isNotEmpty()
 
     LaunchedEffect(subjectId) {
         if (isEditMode) {
@@ -62,6 +65,26 @@ fun AddSubjectScreen(
             }
             schedules = appViewModel.getSchedulesForSubject(subjectId).map { UiClassSchedule(it) }
         }
+    }
+
+    var scheduleToDelete by remember { mutableStateOf<UiClassSchedule?>(null) }
+
+    if (scheduleToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { scheduleToDelete = null },
+            title = { Text("Remove Schedule") },
+            text = { Text("Are you sure you want to remove this class schedule?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        schedules = schedules.filter { it.localId != scheduleToDelete!!.localId }
+                        scheduleToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Remove") }
+            },
+            dismissButton = { TextButton({ scheduleToDelete = null }) { Text("Cancel") } }
+        )
     }
 
     Scaffold(
@@ -77,12 +100,17 @@ fun AddSubjectScreen(
                     Button(
                         onClick = {
                             val newSubject = Subject(
-                                id = if (isEditMode) subjectId else 0,
+                                id = if (isEditMode) subjectId else "",
                                 name = subjectName,
                                 color = subjectColor,
                                 targetAttendance = attendanceTarget
                             )
-                            appViewModel.addOrUpdateSubject(newSubject, schedules.map { it.schedule })
+                            appViewModel.addOrUpdateSubject(
+                                newSubject,
+                                schedules.map { it.schedule },
+                                pastPresent.toIntOrNull() ?: 0,
+                                pastAbsent.toIntOrNull() ?: 0
+                            )
                             navController.popBackStack()
                         },
                         enabled = subjectName.isNotBlank() && schedules.isNotEmpty()
@@ -111,6 +139,18 @@ fun AddSubjectScreen(
             }
             item { ColorPicker(selectedColor = subjectColor, onColorSelected = { subjectColor = it }) }
             item { AttendanceTargetSlider(attendanceTarget, onTargetChange = { attendanceTarget = it }) }
+
+            if (!isEditMode) {
+                item {
+                    PastAttendanceInput(
+                        presentCount = pastPresent,
+                        absentCount = pastAbsent,
+                        onPresentChange = { pastPresent = it },
+                        onAbsentChange = { pastAbsent = it }
+                    )
+                }
+            }
+
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -138,7 +178,7 @@ fun AddSubjectScreen(
             } else {
                 items(schedules, key = { it.localId }) { uiSchedule ->
                     ScheduleCard(uiSchedule.schedule) {
-                        schedules = schedules.filter { it.localId != uiSchedule.localId }
+                        scheduleToDelete = uiSchedule
                     }
                 }
             }
@@ -199,6 +239,39 @@ private fun AttendanceTargetSlider(target: Int, onTargetChange: (Int) -> Unit) {
 }
 
 @Composable
+private fun PastAttendanceInput(
+    presentCount: String,
+    absentCount: String,
+    onPresentChange: (String) -> Unit,
+    onAbsentChange: (String) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Past Attendance (Optional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Text("Add previous classes if you're already tracking this subject elsewhere.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = presentCount,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) onPresentChange(it) },
+                    label = { Text("Attended") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = absentCount,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) onAbsentChange(it) },
+                    label = { Text("Missed") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ScheduleCard(schedule: ClassSchedule, onDelete: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -253,7 +326,7 @@ private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedu
         },
         confirmButton = {
             Button(onClick = {
-                onAddSchedule(ClassSchedule(0, 0, selectedDay, startHour, startMinute, endHour, endMinute))
+                onAddSchedule(ClassSchedule(id = "", subjectId = "", dayOfWeek = selectedDay, startHour = startHour, startMinute = startMinute, endHour = endHour, endMinute = endMinute))
                 onDismiss()
             }) { Text("Add") }
         },

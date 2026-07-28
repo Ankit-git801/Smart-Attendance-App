@@ -3,10 +3,7 @@ package com.ankit.smartattendance.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
-import com.ankit.smartattendance.data.AppDatabase
-import com.ankit.smartattendance.data.AttendanceRecord
-import com.ankit.smartattendance.data.RecordType
+import com.ankit.smartattendance.data.*
 import com.ankit.smartattendance.utils.AlarmScheduler
 import com.ankit.smartattendance.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -36,14 +33,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val subjectId = intent.getLongExtra(EXTRA_SUBJECT_ID, -1L)
+                val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
                 val isPresent = intent.getBooleanExtra(EXTRA_IS_PRESENT, false)
                 val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
-                val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, 0L)
+                val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
 
-                if (subjectId != -1L) {
+                if (subjectId.isNotEmpty()) {
                     val dao = AppDatabase.getDatabase(context).attendanceDao()
+                    val cloudSyncManager = CloudSyncManager(context)
+                    
                     val record = AttendanceRecord(
+                        id = java.util.UUID.randomUUID().toString(),
                         subjectId = subjectId,
                         scheduleId = scheduleId,
                         date = LocalDate.now().toEpochDay(),
@@ -52,6 +52,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         type = RecordType.CLASS
                     )
                     dao.insertAttendanceRecord(record)
+                    cloudSyncManager.syncAttendanceRecord(record)
 
                     val subject = dao.getSubjectById(subjectId)
                     val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
@@ -84,13 +85,16 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val subjectId = intent.getLongExtra(EXTRA_SUBJECT_ID, -1L)
-                val scheduleId = intent.getLongExtra(EXTRA_SCHEDULE_ID, 0L)
+                val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
+                val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
                 val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
 
-                if (subjectId != -1L) {
+                if (subjectId.isNotEmpty()) {
                     val dao = AppDatabase.getDatabase(context).attendanceDao()
+                    val cloudSyncManager = CloudSyncManager(context)
+                    
                     val record = AttendanceRecord(
+                        id = java.util.UUID.randomUUID().toString(),
                         subjectId = subjectId,
                         scheduleId = scheduleId,
                         date = LocalDate.now().toEpochDay(),
@@ -99,6 +103,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         type = RecordType.CANCELLED
                     )
                     dao.insertAttendanceRecord(record)
+                    cloudSyncManager.syncAttendanceRecord(record)
 
                     val subject = dao.getSubjectById(subjectId)
                     val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }

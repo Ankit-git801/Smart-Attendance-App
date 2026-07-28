@@ -38,7 +38,7 @@ object NotificationHelper {
     }
 
     fun buildAttendanceNotification(context: Context, subject: Subject, schedule: ClassSchedule): Notification {
-        val notificationId = schedule.id.toInt()
+        val notificationId = schedule.id.hashCode()
 
         val presentIntent = createActionIntent(context, subject.id, schedule.id, notificationId, true)
         val absentIntent = createActionIntent(context, subject.id, schedule.id, notificationId, false)
@@ -91,7 +91,7 @@ object NotificationHelper {
     }
 
     fun showAttendanceWarningNotification(context: Context, subject: Subject, newPercentage: Double) {
-        val notificationId = subject.id.toInt() + 1000
+        val notificationId = subject.id.hashCode() + 1000
 
         val notification = NotificationCompat.Builder(context, WARNING_CHANNEL_ID)
             // DEFINITIVE FIX: Use your app's icon
@@ -105,7 +105,7 @@ object NotificationHelper {
         notificationManager.notify(notificationId, notification)
     }
 
-    private fun createActionIntent(context: Context, subjectId: Long, scheduleId: Long, notificationId: Int, isPresent: Boolean): PendingIntent {
+    private fun createActionIntent(context: Context, subjectId: String, scheduleId: String, notificationId: Int, isPresent: Boolean): PendingIntent {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_ATTENDANCE
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subjectId)
@@ -116,7 +116,7 @@ object NotificationHelper {
         return PendingIntent.getBroadcast(context, (notificationId * 10) + if (isPresent) 1 else 2, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    private fun createCancelActionIntent(context: Context, subjectId: Long, scheduleId: Long, notificationId: Int): PendingIntent {
+    private fun createCancelActionIntent(context: Context, subjectId: String, scheduleId: String, notificationId: Int): PendingIntent {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_CANCELLED
             putExtra(NotificationActionReceiver.EXTRA_SUBJECT_ID, subjectId)
