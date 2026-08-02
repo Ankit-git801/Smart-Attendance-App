@@ -305,6 +305,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         markAttendance(subjectId, scheduleId, LocalDate.now(), RecordType.CANCELLED, false, "Class Cancelled")
     }
 
+    fun markDateAsCancelled(subjectId: String, date: LocalDate) {
+        markAttendance(subjectId, "-1", date, RecordType.CANCELLED, false, "Class Cancelled")
+    }
+
     fun addExtraClasses(subjectId: String, date: LocalDate, isPresent: Boolean, count: Int) {
         viewModelScope.launch {
             val note = "Extra Class"

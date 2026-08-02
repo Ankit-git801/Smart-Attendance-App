@@ -153,6 +153,9 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
             onConfirm = { isPresent ->
                 appViewModel.updateAttendanceRecord(subjectId, date, isPresent)
             },
+            onConfirmCancelled = {
+                appViewModel.markDateAsCancelled(subjectId, date)
+            },
             onDeleteMain = { clearAllDateRecords = date },
             onDeleteRecord = { recordId -> recordToDelete = recordId },
             onAddExtra = { isPresent -> appViewModel.addExtraClasses(subjectId, date, isPresent, 1) }
@@ -287,6 +290,7 @@ fun MarkAttendanceDialog(
     recordsForDay: List<AttendanceRecord>,
     onDismiss: () -> Unit,
     onConfirm: (Boolean) -> Unit,
+    onConfirmCancelled: () -> Unit,
     onDeleteMain: () -> Unit,
     onDeleteRecord: (String) -> Unit,
     onAddExtra: (Boolean) -> Unit
@@ -342,6 +346,7 @@ fun MarkAttendanceDialog(
                 AttendanceActionRow(Icons.Default.Cancel, "Mark Absent", { onConfirm(false); onDismiss() }, false)
                 AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", { onAddExtra(true); onDismiss() }, true)
                 AttendanceActionRow(Icons.Default.RemoveCircle, "Add Extra Class (Absent)", { onAddExtra(false); onDismiss() }, false)
+                AttendanceActionRow(Icons.Default.EventBusy, "Mark as Cancelled", { onConfirmCancelled(); onDismiss() }, false, MaterialTheme.colorScheme.outline)
             }
         },
         confirmButton = {
@@ -360,7 +365,7 @@ fun MarkAttendanceDialog(
 }
 
 @Composable
-fun AttendanceActionRow(icon: ImageVector, label: String, onClick: () -> Unit, isPositive: Boolean) {
+fun AttendanceActionRow(icon: ImageVector, label: String, onClick: () -> Unit, isPositive: Boolean, overrideColor: Color? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -368,7 +373,8 @@ fun AttendanceActionRow(icon: ImageVector, label: String, onClick: () -> Unit, i
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = if (isPositive) SuccessGreen else ErrorRed)
+        val tint = overrideColor ?: if (isPositive) SuccessGreen else ErrorRed
+        Icon(icon, contentDescription = null, tint = tint)
         Spacer(Modifier.width(16.dp))
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }

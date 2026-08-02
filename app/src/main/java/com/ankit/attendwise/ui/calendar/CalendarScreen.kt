@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
     val allRecords by appViewModel.allAttendanceRecords.collectAsStateWithLifecycle()
+    val allSubjects by appViewModel.allSubjects.collectAsStateWithLifecycle()
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var showDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf<String?>(null) }
@@ -112,6 +113,7 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
                 DayDetailDialog(
                     date = selectedDate!!,
                     records = recordsForSelectedDate,
+                    allSubjects = allSubjects,
                     isHoliday = isCurrentlyHoliday,
                     onDismiss = { showDialog = false },
                     onDeleteRecord = { recordId ->
@@ -125,6 +127,9 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
                             appViewModel.onHolidayToggleRequested(selectedDate!!) // This sets the _showHolidayDialog value
                             showHolidayConfirmation = true
                         }
+                    },
+                    onConfirmCancelled = { subjectId ->
+                        appViewModel.markDateAsCancelled(subjectId, selectedDate!!)
                     }
                 )
             }
@@ -136,10 +141,12 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
 fun DayDetailDialog(
     date: LocalDate,
     records: List<AttendanceRecordWithSubject>,
+    allSubjects: List<com.ankit.attendwise.data.Subject>,
     isHoliday: Boolean,
     onDismiss: () -> Unit,
     onDeleteRecord: (String) -> Unit,
-    onToggleHoliday: () -> Unit
+    onToggleHoliday: () -> Unit,
+    onConfirmCancelled: (String) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -167,6 +174,52 @@ fun DayDetailDialog(
 
                 if (records.isEmpty() && !isHoliday) {
                     Text("No records for this day")
+                }
+
+                if (!isHoliday) {
+                    var showCancelMenu by remember { mutableStateOf(false) }
+
+                    Box {
+                        TextButton(
+                            onClick = { showCancelMenu = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.EventBusy, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Mark Class as Cancelled")
+                        }
+
+                        DropdownMenu(
+                            expanded = showCancelMenu,
+                            onDismissRequest = { showCancelMenu = false },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
+                            if (allSubjects.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No subjects added") },
+                                    onClick = { showCancelMenu = false }
+                                )
+                            } else {
+                                Text(
+                                    "Select Subject",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                allSubjects.forEach { subject ->
+                                    DropdownMenuItem(
+                                        text = { Text(subject.name) },
+                                        onClick = {
+                                            onConfirmCancelled(subject.id)
+                                            showCancelMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
 
                 records.forEach { recordWithSubject ->
