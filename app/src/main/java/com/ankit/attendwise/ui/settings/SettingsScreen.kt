@@ -65,7 +65,6 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                         appViewModel.deleteAllData()
                         showDeleteDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Delete Everything") }
             },
@@ -282,7 +281,6 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
                         showLogoutDialog = false
                         appViewModel.logout()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Sign Out") }
             },

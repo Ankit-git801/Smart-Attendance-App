@@ -89,7 +89,7 @@ fun AddSubjectScreen(
                         schedules = schedules.filter { it.localId != scheduleToDelete!!.localId }
                         scheduleToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    shape = RoundedCornerShape(12.dp)
                 ) { Text("Remove") }
             },
             dismissButton = { TextButton({ scheduleToDelete = null }) { Text("Cancel") } }

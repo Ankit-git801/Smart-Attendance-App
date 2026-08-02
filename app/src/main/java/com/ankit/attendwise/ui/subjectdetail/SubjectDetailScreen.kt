@@ -86,7 +86,6 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                         appViewModel.deleteAttendanceRecordById(recordToDelete!!, subjectId)
                         recordToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Delete") }
             },
@@ -110,7 +109,6 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                         appViewModel.deleteAttendanceRecordForDate(subjectId, clearAllDateRecords!!)
                         clearAllDateRecords = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Clear") }
             },
@@ -229,7 +227,6 @@ fun DeleteConfirmationDialog(subjectName: String, onConfirm: () -> Unit, onDismi
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 shape = RoundedCornerShape(12.dp)
             ) { Text("Delete") }
         },
@@ -350,7 +347,6 @@ fun MarkAttendanceDialog(
         confirmButton = {
             Button(
                 onClick = onDeleteMain,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                 shape = RoundedCornerShape(12.dp)
             ) { Text("Clear Day") }
         },

@@ -68,7 +68,6 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
                         appViewModel.deleteAttendanceRecordById(recordId, subjectId)
                         showDeleteConfirmation = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Delete") }
             },
