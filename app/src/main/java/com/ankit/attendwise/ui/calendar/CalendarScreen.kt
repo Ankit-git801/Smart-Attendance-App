@@ -349,6 +349,7 @@ fun Day(
 ) {
     val isHoliday = records.any { it.type == RecordType.HOLIDAY }
     val hasRecords = records.any { it.type != RecordType.HOLIDAY }
+    val isToday = date == LocalDate.now()
 
     Box(
         modifier = Modifier
@@ -358,8 +359,13 @@ fun Day(
             .background(
                 when {
                     isHoliday -> HolidayYellow.copy(alpha = 0.2f)
+                    isToday -> MaterialTheme.colorScheme.primaryContainer
                     else -> Color.Transparent
                 }
+            )
+            .then(
+                if (isToday) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                else Modifier
             )
             .clickable { onClick(date) },
         contentAlignment = Alignment.Center
@@ -368,7 +374,12 @@ fun Day(
             Text(
                 text = date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (isHoliday) HolidayYellow else MaterialTheme.colorScheme.onSurface
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                color = when {
+                    isHoliday -> HolidayYellow
+                    isToday -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
             )
             if (hasRecords) {
                 Row(

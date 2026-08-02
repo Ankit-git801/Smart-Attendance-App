@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -571,6 +572,7 @@ fun Day(
 ) {
     val isHoliday = records.any { it.type == RecordType.HOLIDAY }
     val hasRecords = records.any { it.type != RecordType.HOLIDAY }
+    val isToday = day.date == LocalDate.now()
 
     Box(
         modifier = Modifier
@@ -580,8 +582,13 @@ fun Day(
             .background(
                 when {
                     isHoliday -> HolidayYellow.copy(alpha = 0.2f)
+                    isToday && day.position == DayPosition.MonthDate -> MaterialTheme.colorScheme.primaryContainer
                     else -> Color.Transparent
                 }
+            )
+            .then(
+                if (isToday && day.position == DayPosition.MonthDate) Modifier.border(1.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                else Modifier
             )
             .clickable(enabled = day.position == DayPosition.MonthDate) { onClick(day.date) },
         contentAlignment = Alignment.Center
@@ -590,9 +597,11 @@ fun Day(
             Text(
                 text = day.date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isToday && day.position == DayPosition.MonthDate) FontWeight.Bold else FontWeight.Normal,
                 color = when {
                     day.position != DayPosition.MonthDate -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     isHoliday -> HolidayYellow
+                    isToday -> MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.onSurface
                 }
             )
