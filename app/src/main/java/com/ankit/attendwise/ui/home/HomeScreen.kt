@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,6 +88,8 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val userName by appViewModel.userName.collectAsStateWithLifecycle()
     val bunkAnalysisMap by appViewModel.bunkAnalysisMap.collectAsStateWithLifecycle()
     var showExtraClassDialog by remember { mutableStateOf(false) }
+    
+    val haptic = LocalHapticFeedback.current
 
     val allSubjects by appViewModel.allSubjects.collectAsStateWithLifecycle()
 
@@ -102,8 +106,14 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
 
         item {
             QuickActions(
-                onNewSubjectClick = { navController.navigate("add_subject") },
-                onExtraClassClick = { showExtraClassDialog = true }
+                onNewSubjectClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate("add_subject") 
+                },
+                onExtraClassClick = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showExtraClassDialog = true 
+                }
             )
         }
 
@@ -160,7 +170,10 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 SubjectCard(
                     subjectWithAttendance = subjectWithAttendance,
                     bunkAnalysis = bunkAnalysisMap[subjectWithAttendance.subject.id],
-                    onClick = { navController.navigate("subject_detail/${subjectWithAttendance.subject.id}") }
+                    onClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        navController.navigate("subject_detail/${subjectWithAttendance.subject.id}") 
+                    }
                 )
             }
         }
@@ -429,6 +442,7 @@ fun TodayScheduleCard(
     val isProcessing = processingIds.contains(scheduleWithSubject.schedule.id)
     
     val record = scheduleWithSubject.attendanceRecord
+    val haptic = LocalHapticFeedback.current
     
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -548,21 +562,30 @@ fun TodayScheduleCard(
                                     )
                                 } else {
                                     FilledTonalButton(
-                                        onClick = { appViewModel.markTodayAsPresent(subject.id, schedule.id) },
+                                        onClick = { 
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            appViewModel.markTodayAsPresent(subject.id, schedule.id) 
+                                        },
                                         shape = RoundedCornerShape(12.dp),
                                         enabled = !isProcessing
                                     ) {
                                         Text("Present")
                                     }
                                     OutlinedButton(
-                                        onClick = { appViewModel.markTodayAsAbsent(subject.id, schedule.id) },
+                                        onClick = { 
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            appViewModel.markTodayAsAbsent(subject.id, schedule.id) 
+                                        },
                                         shape = RoundedCornerShape(12.dp),
                                         enabled = !isProcessing
                                     ) {
                                         Text("Absent")
                                     }
                                     IconButton(
-                                        onClick = { appViewModel.markTodayAsCancelled(subject.id, schedule.id) },
+                                        onClick = { 
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            appViewModel.markTodayAsCancelled(subject.id, schedule.id) 
+                                        },
                                         enabled = !isProcessing,
                                         colors = IconButtonDefaults.iconButtonColors(
                                             contentColor = MaterialTheme.colorScheme.error

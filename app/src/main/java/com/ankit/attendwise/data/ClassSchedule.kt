@@ -2,6 +2,7 @@ package com.ankit.attendwise.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
@@ -14,6 +15,10 @@ import java.util.UUID
             childColumns = ["subjectId"],
             onDelete = ForeignKey.CASCADE
         )
+    ],
+    indices = [
+        Index(value = ["subjectId"]),
+        Index(value = ["dayOfWeek"])
     ]
 )
 data class ClassSchedule(

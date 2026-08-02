@@ -1,12 +1,19 @@
 package com.ankit.attendwise.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
 import com.google.firebase.firestore.PropertyName
 
-@Entity(tableName = "attendance_records")
+@Entity(
+    tableName = "attendance_records",
+    indices = [
+        Index(value = ["subjectId"]),
+        Index(value = ["date"])
+    ]
+)
 data class AttendanceRecord(
     @PrimaryKey
     val id: String = java.util.UUID.randomUUID().toString(),

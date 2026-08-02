@@ -1,3 +1,20 @@
 <resources>
     <string name="app_name">AttendWise</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_calendar">Calendar</string>
+    <string name="nav_stats">Stats</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Attendance -->
+    <string name="mark_present">Present</string>
+    <string name="mark_absent">Absent</string>
+    <string name="mark_cancelled">Cancelled</string>
+    <string name="mark_holiday">Holiday</string>
+
+    <!-- Bunk Analysis -->
+    <string name="bunk_safe">You can bunk %1$d classes.</string>
+    <string name="bunk_risk">Attend next %1$d classes.</string>
+    <string name="bunk_on_track">On track!</string>
 </resources>

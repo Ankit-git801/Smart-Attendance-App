@@ -255,7 +255,7 @@ fun ThemeDialog(currentTheme: String, onDismiss: () -> Unit, onThemeSelected: (S
 @Composable
 fun CloudSettingsItem(appViewModel: AppViewModel) {
     var user by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-    var isLoading by remember { mutableStateOf(false) }
+    val isSyncing by appViewModel.isSyncing.collectAsStateWithLifecycle()
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showAuthDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -325,8 +325,9 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
             }
             Spacer(Modifier.height(8.dp))
             
-            if (isLoading) {
+            if (isSyncing) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                Text("Syncing with cloud...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             } else {
                 val displayMessage = when {
                     user != null -> "Account: ${user?.email}. Data is automatically synced with the cloud."
@@ -345,7 +346,7 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
                 Button(
                     onClick = { showAuthDialog = true },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading,
+                    enabled = !isSyncing,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(Icons.Default.Login, contentDescription = null)

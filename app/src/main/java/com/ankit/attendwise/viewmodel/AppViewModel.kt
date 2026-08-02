@@ -57,6 +57,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             emptyList()
         )
 
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     private val _showHolidayDialog = MutableStateFlow<LocalDate?>(null)
     val showHolidayDialog: StateFlow<LocalDate?> = _showHolidayDialog.asStateFlow()
 
@@ -567,11 +570,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun restoreDataFromCloud(onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
-            val success = cloudSyncManager.restoreAllData(attendanceDao)
-            if (success) {
-                rescheduleAllAlarms()
+            _isSyncing.value = true
+            try {
+                val success = cloudSyncManager.restoreAllData(attendanceDao)
+                if (success) {
+                    rescheduleAllAlarms()
+                }
+                onComplete(success)
+            } finally {
+                _isSyncing.value = false
             }
-            onComplete(success)
         }
     }
 
@@ -603,6 +611,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loginWithEmail(email: String, password: String, onComplete: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
+            _isSyncing.value = true
             try {
                 val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                 auth.signInWithEmailAndPassword(email, password).await()
@@ -628,6 +637,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val errorMsg = e.message
                 Log.e("AppViewModel", "Login failed: $errorMsg")
                 onComplete(false, errorMsg)
+            } finally {
+                _isSyncing.value = false
             }
         }
     }

@@ -18,7 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -54,6 +56,8 @@ fun AddSubjectScreen(
 
     var pastPresent by remember { mutableStateOf("0") }
     var pastAbsent by remember { mutableStateOf("0") }
+    
+    val haptic = LocalHapticFeedback.current
 
     val isEditMode = subjectId.isNotEmpty()
     val hasInvalidSchedules = schedules.any { 
@@ -104,6 +108,7 @@ fun AddSubjectScreen(
                 actions = {
                     Button(
                         onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             val newSubject = Subject(
                                 id = if (isEditMode) subjectId else "",
                                 name = subjectName,
