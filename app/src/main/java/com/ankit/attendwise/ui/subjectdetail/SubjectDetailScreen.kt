@@ -43,6 +43,7 @@ import com.ankit.attendwise.ui.theme.ErrorRed
 import com.ankit.attendwise.ui.theme.HolidayYellow
 import com.ankit.attendwise.ui.theme.PoppinsFamily
 import com.ankit.attendwise.ui.theme.SuccessGreen
+import com.ankit.attendwise.utils.ColorUtils
 import com.ankit.attendwise.viewmodel.AppViewModel
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
@@ -169,6 +170,13 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
         )
     }
 
+    // AUTO-EXIT: If subject is deleted via sync, go back to prevent crash
+    LaunchedEffect(subjectWithAttendance) {
+        if (subjectWithAttendance == null) {
+            navController.popBackStack()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -199,6 +207,7 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                 CircularProgressIndicator()
             }
         } else {
+            val currentSubjectWithAttendance = subjectWithAttendance!!
             Column(
                 modifier = Modifier
                     .padding(paddingValues)
@@ -207,10 +216,10 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                AttendanceProgressCard(subjectWithAttendance!!)
-                AttendanceStatsCard(subjectWithAttendance!!)
-                if (bunkAnalysis != null) {
-                    BunkAnalysisCard(bunkAnalysis!!, subjectWithAttendance!!.subject)
+                AttendanceProgressCard(currentSubjectWithAttendance)
+                AttendanceStatsCard(currentSubjectWithAttendance)
+                bunkAnalysis?.let {
+                    BunkAnalysisCard(it, currentSubjectWithAttendance.subject)
                 }
 
                 Text(
@@ -432,7 +441,7 @@ fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
         ) {
             AnimatedCircularProgress(
                 progress = subjectWithAttendance.percentage.toFloat() / 100f,
-                color = Color(android.graphics.Color.parseColor(subjectWithAttendance.subject.color)),
+                color = ColorUtils.safeParseColor(subjectWithAttendance.subject.color),
                 size = 100.dp,
                 strokeWidth = 10.dp
             )
@@ -567,6 +576,14 @@ fun AttendanceCalendar(
 
     val coroutineScope = rememberCoroutineScope()
 
+    val recordsByDate = remember(subjectRecords) {
+        subjectRecords.groupBy { it.date }
+    }
+    
+    val holidaysByDate = remember(allRecords) {
+        allRecords.filter { it.type == RecordType.HOLIDAY }.associateBy { it.date }
+    }
+
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -599,8 +616,9 @@ fun AttendanceCalendar(
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
-                val dateRecords = subjectRecords.filter { it.date == day.date.toEpochDay() }
-                val isHoliday = allRecords.any { it.date == day.date.toEpochDay() && it.type == RecordType.HOLIDAY }
+                val dateAsLong = day.date.toEpochDay()
+                val dateRecords = recordsByDate[dateAsLong] ?: emptyList()
+                val isHoliday = holidaysByDate.containsKey(dateAsLong)
                 Day(day, dateRecords, isHoliday, onDayClick)
             }
         )

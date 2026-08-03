@@ -32,6 +32,7 @@ import com.ankit.attendwise.models.AttendanceStatistics
 import com.ankit.attendwise.models.SubjectWithAttendance
 import com.ankit.attendwise.ui.theme.ErrorRed
 import com.ankit.attendwise.ui.theme.SuccessGreen
+import com.ankit.attendwise.utils.ColorUtils
 import com.ankit.attendwise.viewmodel.AppViewModel
 import kotlinx.coroutines.launch
 
@@ -60,7 +61,11 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    OverallPerformanceCard(stats)
+                    val averageTarget = remember(subjectsWithAttendance) {
+                        if (subjectsWithAttendance.isEmpty()) 75f 
+                        else subjectsWithAttendance.map { it.subject.targetAttendance }.average().toFloat()
+                    }
+                    OverallPerformanceCard(stats, averageTarget)
                 }
 
                 item {
@@ -119,7 +124,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun OverallPerformanceCard(stats: AttendanceStatistics) {
+private fun OverallPerformanceCard(stats: AttendanceStatistics, target: Float) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(24.dp)) {
             Text(
@@ -129,7 +134,10 @@ private fun OverallPerformanceCard(stats: AttendanceStatistics) {
             )
             Spacer(Modifier.height(24.dp))
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                DonutChart(percentage = stats.overallPercentage.toFloat())
+                DonutChart(
+                    percentage = stats.overallPercentage.toFloat(),
+                    target = target
+                )
             }
             Spacer(Modifier.height(24.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -158,6 +166,7 @@ private fun OverallPerformanceCard(stats: AttendanceStatistics) {
 @Composable
 private fun DonutChart(
     percentage: Float,
+    target: Float,
     radius: Dp = 80.dp,
     strokeWidth: Dp = 16.dp
 ) {
@@ -167,7 +176,7 @@ private fun DonutChart(
         label = "donut_chart_progress"
     )
     
-    val chartColor = if (animatedPercentage >= 75f) SuccessGreen else ErrorRed
+    val chartColor = if (animatedPercentage >= target) SuccessGreen else ErrorRed
 
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(radius * 2)) {
         Canvas(modifier = Modifier.size(radius * 2)) {
@@ -243,7 +252,7 @@ private fun SubjectStatCard(
                 Modifier
                     .size(12.dp)
                     .background(
-                        Color(android.graphics.Color.parseColor(subject.color)),
+                        ColorUtils.safeParseColor(subject.color),
                         CircleShape
                     )
             )

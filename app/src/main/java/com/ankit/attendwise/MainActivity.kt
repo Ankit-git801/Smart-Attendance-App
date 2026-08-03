@@ -15,9 +15,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.util.Log
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
@@ -73,6 +77,8 @@ import com.ankit.attendwise.viewmodel.AppViewModel
 import android.widget.Toast
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -300,9 +306,30 @@ fun RequestManufacturerBatteryOptimization() {
 @Composable
 fun AttendWiseApp(appViewModel: AppViewModel) {
     val navController = rememberNavController()
+    val context = LocalContext.current
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val isOnboardingComplete by appViewModel.isOnboardingComplete.collectAsStateWithLifecycle()
+
+    // SMART NAV: Handle navigation from notifications with race condition safety
+    LaunchedEffect(isOnboardingComplete) {
+        if (isOnboardingComplete == true) {
+            val activity = context as? ComponentActivity
+            val subjectId = activity?.intent?.getStringExtra("subject_id")
+            
+            if (!subjectId.isNullOrEmpty()) {
+                try {
+                    navController.navigate("subject_detail/$subjectId") {
+                        launchSingleTop = true
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Navigation failed: ${e.message}")
+                }
+                activity?.intent?.removeExtra("subject_id")
+            }
+        }
+    }
 
     if (isOnboardingComplete == null) return
 
@@ -345,8 +372,8 @@ fun AppNavigation(
         navController = navController,
         startDestination = if (isOnboardingComplete) BottomNavItem.Home.route else "onboarding",
         modifier = modifier,
-        enterTransition = { EnterTransition.None },
-        exitTransition = { ExitTransition.None }
+        enterTransition = { fadeIn(animationSpec = tween(400)) },
+        exitTransition = { fadeOut(animationSpec = tween(400)) }
     ) {
         composable("onboarding") {
             OnboardingScreen(appViewModel = appViewModel, onComplete = {

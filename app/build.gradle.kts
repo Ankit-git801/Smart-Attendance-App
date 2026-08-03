@@ -70,9 +70,6 @@ dependencies {
     // Splash Screen API
     implementation("androidx.core:core-splashscreen:1.2.0")
 
-    // NEW: Haze library for Glassmorphism effect
-    implementation("dev.chrisbanes.haze:haze-jetpack-compose:0.7.0")
-
     // Room Database
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")

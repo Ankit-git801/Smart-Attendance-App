@@ -1,11 +1,13 @@
 package com.ankit.attendwise.data
 
+import androidx.annotation.Keep
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
+@Keep
 @Entity(
     tableName = "class_schedules",
     foreignKeys = [

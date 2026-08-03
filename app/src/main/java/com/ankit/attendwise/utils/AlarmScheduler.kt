@@ -8,10 +8,13 @@ import android.util.Log
 import com.ankit.attendwise.data.ClassSchedule
 import com.ankit.attendwise.data.Subject
 import com.ankit.attendwise.receivers.AlarmReceiver
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.time.DayOfWeek
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
+import java.util.*
 
 object AlarmScheduler {
     private const val TAG = "AlarmScheduler"
@@ -22,7 +25,7 @@ object AlarmScheduler {
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("subject_id", subject.id)
             putExtra("schedule_id", schedule.id)
-            putExtra("subject_name", subject.name)
+            putExtra("subject_name", subject.name ?: "Unknown")
         }
 
         val requestCode = schedule.id.hashCode()
@@ -33,34 +36,36 @@ object AlarmScheduler {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // DEFINITIVE FIX: Using the class END TIME (endHour, endMinute) to set the alarm.
-        val alarmTime = Calendar.getInstance().apply {
-            set(Calendar.DAY_OF_WEEK, schedule.dayOfWeek)
-            // Use the end hour and minute for the alarm trigger.
-            set(Calendar.HOUR_OF_DAY, schedule.endHour)
-            set(Calendar.MINUTE, schedule.endMinute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+        // SAFETY GUARD: Prevent crash if data is malformed
+        if (schedule.dayOfWeek !in 1..7 || schedule.endHour !in 0..23 || schedule.endMinute !in 0..59) {
+            Log.w(TAG, "Skipping invalid schedule for ${subject.name}: Day=${schedule.dayOfWeek}, Time=${schedule.endHour}:${schedule.endMinute}")
+            return
         }
 
-        // Check if today is a holiday before scheduling for today or in the future
-        // Note: For simplicity, we check if the alarmTime's date is a holiday.
-        // This requires a DB check, which we'll do in a non-blocking way if possible, 
-        // or just rely on the receiver/service to check before showing notification.
-        // Re-scheduling already handles this via cancelClassAlarm in holiday toggle.
+        // MODERN FIX: Using java.time for robust scheduling
+        // Convert Calendar day (1=Sun, 2=Mon) to java.time.DayOfWeek (1=Mon, 7=Sun)
+        val targetDayOfWeek = if (schedule.dayOfWeek == 1) DayOfWeek.SUNDAY else DayOfWeek.of(schedule.dayOfWeek - 1)
+        val targetTime = LocalTime.of(schedule.endHour, schedule.endMinute)
+        
+        val now = LocalDateTime.now()
+        var alarmDateTime = now.with(TemporalAdjusters.nextOrSame(targetDayOfWeek))
+            .with(targetTime)
+            .withSecond(0)
+            .withNano(0)
 
-        // If the calculated end time for today has already passed, schedule it for the same day next week.
-        if (alarmTime.timeInMillis <= System.currentTimeMillis()) {
-            alarmTime.add(Calendar.DATE, 7)
+        // If the calculated time for today has already passed, schedule for next week
+        if (alarmDateTime.isBefore(now.plusSeconds(10))) {
+            alarmDateTime = alarmDateTime.with(TemporalAdjusters.next(targetDayOfWeek))
         }
 
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        Log.d(TAG, "Scheduling alarm for ${subject.name} to trigger at: ${dateFormat.format(Date(alarmTime.timeInMillis))}")
+        val triggerTimeMs = alarmDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        Log.d(TAG, "Scheduling alarm for ${subject.name ?: "Unknown"} at: ${alarmDateTime.format(formatter)}")
 
         try {
-            val clockInfo = AlarmManager.AlarmClockInfo(alarmTime.timeInMillis, null)
+            val clockInfo = AlarmManager.AlarmClockInfo(triggerTimeMs, null)
             alarmManager.setAlarmClock(clockInfo, pendingIntent)
-            Log.d(TAG, "Alarm successfully scheduled using setAlarmClock.")
+            Log.d(TAG, "Alarm successfully set.")
         } catch (e: Exception) {
             Log.e(TAG, "Error scheduling alarm: ${e.message}")
         }

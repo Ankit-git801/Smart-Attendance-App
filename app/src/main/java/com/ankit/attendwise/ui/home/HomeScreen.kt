@@ -39,6 +39,7 @@ import com.ankit.attendwise.models.SubjectWithAttendance
 import com.ankit.attendwise.ui.theme.ErrorRed
 import com.ankit.attendwise.ui.theme.PoppinsFamily
 import com.ankit.attendwise.ui.theme.SuccessGreen
+import com.ankit.attendwise.utils.ColorUtils
 import com.ankit.attendwise.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
 import java.time.LocalDate
@@ -87,17 +88,13 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     val todaysSchedule by appViewModel.todaysScheduleWithSubjects.collectAsStateWithLifecycle()
     val userName by appViewModel.userName.collectAsStateWithLifecycle()
     val bunkAnalysisMap by appViewModel.bunkAnalysisMap.collectAsStateWithLifecycle()
+    val currentDate by appViewModel.currentDate.collectAsStateWithLifecycle()
     var showExtraClassDialog by remember { mutableStateOf(false) }
     
     val haptic = LocalHapticFeedback.current
 
     val allSubjects by appViewModel.allSubjects.collectAsStateWithLifecycle()
-
-    val allAttendanceRecords by appViewModel.allAttendanceRecords.collectAsStateWithLifecycle()
-    val isTodayHoliday = remember(allAttendanceRecords) {
-        val todayEpoch = LocalDate.now().toEpochDay()
-        allAttendanceRecords.any { it.date == todayEpoch && it.type == RecordType.HOLIDAY }
-    }
+    val isTodayHoliday by appViewModel.isTodayHoliday.collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = Modifier
@@ -107,7 +104,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            GreetingCard(userName)
+            GreetingCard(userName, currentDate)
         }
 
         item {
@@ -155,7 +152,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 )
             }
         } else {
-            items(todaysSchedule) { schedule ->
+            items(todaysSchedule, key = { it.schedule.id }) { schedule ->
                 TodayScheduleCard(
                     scheduleWithSubject = schedule,
                     appViewModel = appViewModel,
@@ -185,7 +182,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
                 )
             }
         } else {
-            items(subjectsWithAttendance) { subjectWithAttendance ->
+            items(subjectsWithAttendance, key = { it.subject.id }) { subjectWithAttendance ->
                 SubjectCard(
                     subjectWithAttendance = subjectWithAttendance,
                     bunkAnalysis = bunkAnalysisMap[subjectWithAttendance.subject.id],
@@ -228,45 +225,71 @@ fun ExtraClassDialog(
                 if (subjects.isEmpty()) {
                     Text("No subjects available. Add a subject first.")
                 } else {
-                    Text("Subject")
-                    ScrollableTabRow(
-                        selectedTabIndex = subjects.indexOfFirst { it.id == selectedSubjectId }.coerceAtLeast(0),
-                        edgePadding = 0.dp,
-                        containerColor = Color.Transparent,
-                        divider = {}
+                    Text("Subject", fontWeight = FontWeight.Bold)
+                    
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         subjects.forEach { subject ->
-                            Tab(
+                            FilterChip(
                                 selected = selectedSubjectId == subject.id,
                                 onClick = { selectedSubjectId = subject.id },
-                                text = { Text(subject.name) }
+                                label = { Text(subject.name) },
+                                shape = RoundedCornerShape(12.dp)
                             )
                         }
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Status", modifier = Modifier.weight(1f))
-                        FilterChip(
-                            selected = isPresent,
-                            onClick = { isPresent = true },
-                            label = { Text("Present") }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        FilterChip(
-                            selected = !isPresent,
-                            onClick = { isPresent = false },
-                            label = { Text("Absent") }
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Status", fontWeight = FontWeight.Bold)
+                        Row {
+                            FilterChip(
+                                selected = isPresent,
+                                onClick = { isPresent = true },
+                                label = { Text("Present") },
+                                leadingIcon = if (isPresent) {
+                                    { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
+                                } else null,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            FilterChip(
+                                selected = !isPresent,
+                                onClick = { isPresent = false },
+                                label = { Text("Absent") },
+                                leadingIcon = if (!isPresent) {
+                                    { Icon(Icons.Default.Close, null, Modifier.size(18.dp)) }
+                                } else null,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                        }
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Count", modifier = Modifier.weight(1f))
-                        IconButton(onClick = { if (count > 1) count-- }) {
-                            Icon(Icons.Default.Remove, null)
-                        }
-                        Text(count.toString(), style = MaterialTheme.typography.titleLarge)
-                        IconButton(onClick = { count++ }) {
-                            Icon(Icons.Default.Add, null)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Count", fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { if (count > 1) count-- }) {
+                                Icon(Icons.Default.Remove, null)
+                            }
+                            Text(
+                                count.toString(),
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                            IconButton(onClick = { count++ }) {
+                                Icon(Icons.Default.Add, null)
+                            }
                         }
                     }
                 }
@@ -289,9 +312,11 @@ fun ExtraClassDialog(
 }
 
 @Composable
-fun GreetingCard(userName: String) {
+fun GreetingCard(userName: String, currentDate: LocalDate) {
     val greetingInfo = getGreetingInfo()
-    val date = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d"))
+    val date = remember(currentDate) { 
+        currentDate.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")) 
+    }
 
     Card(
         modifier = Modifier
@@ -476,7 +501,7 @@ fun TodayScheduleCard(
     val schedule = scheduleWithSubject.schedule
     val startTime = remember(schedule.startHour, schedule.startMinute) { formatTime(schedule.startHour, schedule.startMinute) }
     val endTime = remember(schedule.endHour, schedule.endMinute) { formatTime(schedule.endHour, schedule.endMinute) }
-    val subjectColor = remember(subject.color) { Color(android.graphics.Color.parseColor(subject.color)) }
+    val subjectColor = remember(subject.color) { ColorUtils.safeParseColor(subject.color) }
     val isLive = scheduleWithSubject.isCurrentClass
 
     Card(
@@ -661,7 +686,7 @@ private fun formatTime(hour: Int, minute: Int): String {
 fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, bunkAnalysis: BunkAnalysis?, onClick: () -> Unit) {
     val subject = subjectWithAttendance.subject
     val percentage = subjectWithAttendance.percentage
-    val subjectColor = remember(subject.color) { Color(android.graphics.Color.parseColor(subject.color)) }
+    val subjectColor = remember(subject.color) { ColorUtils.safeParseColor(subject.color) }
     
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()

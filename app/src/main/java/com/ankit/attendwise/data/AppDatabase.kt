@@ -29,6 +29,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "smart_attendance_db"
                 )
+                    // CAUTION: destructive migration will clear all local data on schema change.
+                    // Cloud sync provides a safety net for this.
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

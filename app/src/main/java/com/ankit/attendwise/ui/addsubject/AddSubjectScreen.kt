@@ -1,6 +1,7 @@
 package com.ankit.attendwise.ui.addsubject
 
 import android.app.TimePickerDialog
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ankit.attendwise.data.ClassSchedule
 import com.ankit.attendwise.data.Subject
+import com.ankit.attendwise.utils.ColorUtils
 import com.ankit.attendwise.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -37,8 +39,8 @@ data class UiClassSchedule(
 )
 
 val predefinedColors = listOf(
-    "#4CAF50", "#81C784", "#2196F3", "#64B5F6", "#9C27B0",
-    "#BA68C8", "#E91E63", "#F06292", "#FF9800", "#FFB74D"
+    "#FF9800", "#FFB74D", "#E91E63", "#F06292", "#9C27B0",
+    "#BA68C8", "#2196F3", "#64B5F6", "#4CAF50", "#81C784"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,11 +61,47 @@ fun AddSubjectScreen(
     
     val haptic = LocalHapticFeedback.current
 
+    // Tracks if anything has been modified to show discard dialog
+    var hasChanges by remember { mutableStateOf(false) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    val onBackRequest = {
+        if (hasChanges) {
+            showDiscardDialog = true
+        } else {
+            navController.popBackStack()
+        }
+    }
+
+    BackHandler(onBack = { onBackRequest() })
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("Discard Changes?") },
+            text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardDialog = false
+                        navController.popBackStack()
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("Discard") }
+            },
+            dismissButton = { 
+                TextButton({ showDiscardDialog = false }) { Text("Cancel") } 
+            }
+        )
+    }
+
     val isEditMode = subjectId.isNotEmpty()
     val hasInvalidSchedules = schedules.any { 
         it.schedule.startHour > it.schedule.endHour || 
         (it.schedule.startHour == it.schedule.endHour && it.schedule.startMinute >= it.schedule.endMinute)
     }
+
+    var isInitialized by remember { mutableStateOf(false) }
 
     LaunchedEffect(subjectId) {
         if (isEditMode) {
@@ -74,6 +112,8 @@ fun AddSubjectScreen(
             }
             schedules = appViewModel.getSchedulesForSubject(subjectId).map { UiClassSchedule(it) }
         }
+        isInitialized = true
+        hasChanges = false
     }
 
     var scheduleToDelete by remember { mutableStateOf<UiClassSchedule?>(null) }
@@ -101,7 +141,7 @@ fun AddSubjectScreen(
             TopAppBar(
                 title = { Text(if (isEditMode) "Edit Subject" else "Add Subject") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
+                    IconButton(onClick = { onBackRequest() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -121,6 +161,7 @@ fun AddSubjectScreen(
                                 pastPresent.toIntOrNull() ?: 0,
                                 pastAbsent.toIntOrNull() ?: 0
                             )
+                            hasChanges = false
                             navController.popBackStack()
                         },
                         enabled = subjectName.isNotBlank() && schedules.isNotEmpty() && !hasInvalidSchedules
@@ -131,6 +172,11 @@ fun AddSubjectScreen(
             )
         }
     ) { paddingValues ->
+        LaunchedEffect(subjectName, subjectColor, attendanceTarget, schedules, pastPresent, pastAbsent) {
+            if (isInitialized) {
+                hasChanges = true
+            }
+        }
         LazyColumn(
             modifier = Modifier
                 .padding(paddingValues)
@@ -244,7 +290,7 @@ private fun ColorPicker(selectedColor: String, onColorSelected: (String) -> Unit
             ) {
                 items(predefinedColors) { colorHex ->
                     val isSelected = colorHex.lowercase() == selectedColor.lowercase()
-                    val color = Color(android.graphics.Color.parseColor(colorHex))
+                    val color = ColorUtils.safeParseColor(colorHex)
                     
                     Box(
                         modifier = Modifier

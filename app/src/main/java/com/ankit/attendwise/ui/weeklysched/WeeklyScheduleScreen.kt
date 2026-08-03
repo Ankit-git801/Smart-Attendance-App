@@ -11,13 +11,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.ankit.attendwise.models.ScheduleWithSubject
+import com.ankit.attendwise.utils.ColorUtils
 import com.ankit.attendwise.viewmodel.AppViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -78,7 +78,7 @@ fun WeeklyScheduleScreen(navController: NavController, appViewModel: AppViewMode
 
 @Composable
 private fun ScheduleItem(schedule: ScheduleWithSubject) {
-    val subjectColor = remember(schedule.subject.color) { Color(android.graphics.Color.parseColor(schedule.subject.color)) }
+    val subjectColor = remember(schedule.subject.color) { ColorUtils.safeParseColor(schedule.subject.color) }
     val startTime = remember(schedule.schedule.startHour, schedule.schedule.startMinute) { formatTime(schedule.schedule.startHour, schedule.schedule.startMinute) }
     val endTime = remember(schedule.schedule.endHour, schedule.schedule.endMinute) { formatTime(schedule.schedule.endHour, schedule.schedule.endMinute) }
 
@@ -101,7 +101,7 @@ private fun ScheduleItem(schedule: ScheduleWithSubject) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = schedule.subject.name,
+                    text = schedule.subject.name ?: "Unknown",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold
                 )

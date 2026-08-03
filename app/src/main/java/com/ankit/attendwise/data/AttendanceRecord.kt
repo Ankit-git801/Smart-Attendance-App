@@ -1,5 +1,6 @@
 package com.ankit.attendwise.data
 
+import androidx.annotation.Keep
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -7,6 +8,7 @@ import java.util.UUID
 
 import com.google.firebase.firestore.PropertyName
 
+@Keep
 @Entity(
     tableName = "attendance_records",
     indices = [
@@ -28,6 +30,7 @@ data class AttendanceRecord(
     val lastUpdated: Long = System.currentTimeMillis()
 )
 
+@Keep
 enum class RecordType {
     CLASS,
     CANCELLED,

@@ -6,7 +6,9 @@ import android.content.Intent
 import android.util.Log
 import com.ankit.attendwise.data.AppDatabase
 import com.ankit.attendwise.data.RecordType
-import com.ankit.attendwise.services.ReminderService
+import com.ankit.attendwise.utils.AlarmScheduler
+import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_MANUAL
+import com.ankit.attendwise.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,19 +36,34 @@ class AlarmReceiver : BroadcastReceiver() {
                     val isHoliday = todayRecords.any { it.type == RecordType.HOLIDAY }
 
                     if (isHoliday) {
-                        Log.d(TAG, "Today is a Holiday. Rescheduling for next week without starting service.")
+                        Log.d(TAG, "Today is a Holiday. Rescheduling for next week without showing notification.")
                         val subject = dao.getSubjectById(subjectId)
                         val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
                         if (subject != null && schedule != null) {
-                            com.ankit.attendwise.utils.AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
                         }
                     } else {
-                        val serviceIntent = Intent(context, ReminderService::class.java).apply {
-                            putExtra("subject_id", subjectId)
-                            putExtra("schedule_id", scheduleId)
+                        val subject = dao.getSubjectById(subjectId)
+                        val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
+                        
+                        if (subject != null && schedule != null) {
+                            // Reschedule for next week
+                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+
+                            // Check if already marked for today
+                            val dateAsLong = LocalDate.now().toEpochDay()
+                            val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
+                            val isAlreadyMarked = existingRecords.any { 
+                                it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL
+                            }
+
+                            if (!isAlreadyMarked) {
+                                Log.d(TAG, "Showing notification for ${subject.name ?: "Class"}")
+                                NotificationHelper.showAttendanceNotification(context, subject, schedule)
+                            } else {
+                                Log.d(TAG, "Skipping notification (already marked)")
+                            }
                         }
-                        context.startForegroundService(serviceIntent)
-                        Log.d(TAG, "ReminderService started successfully")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in AlarmReceiver: ${e.message}")

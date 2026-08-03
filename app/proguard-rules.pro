@@ -16,6 +16,28 @@
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Firebase/Firestore
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+
+# Data Models - Preserve exact names for Firestore/Room
+-keep class com.ankit.attendwise.data.** { *; }
+-keepclassmembers class com.ankit.attendwise.data.** {
+    <fields>;
+    <init>(...);
+}
+-keepclassmembernames class com.ankit.attendwise.data.** {
+    <fields>;
+    <init>(...);
+}
+
+-keepattributes *Annotation*
+-keepattributes Signature
+
+# Room
+-keep class androidx.room.** { *; }
+-keep class * extends androidx.room.RoomDatabase
+-keep class * implements androidx.room.RoomOpenHelper
+
+# Coroutines
+-keep class kotlinx.coroutines.** { *; }

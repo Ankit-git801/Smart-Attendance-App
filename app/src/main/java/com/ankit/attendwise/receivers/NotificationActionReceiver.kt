@@ -8,14 +8,15 @@ import com.ankit.attendwise.data.*
 import com.ankit.attendwise.utils.AlarmScheduler
 import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_MANUAL
 import com.ankit.attendwise.utils.NotificationHelper
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 
 class NotificationActionReceiver : BroadcastReceiver() {
 
     companion object {
+        private val actionMutex = Mutex() // Global safety lock for notification actions
         const val ACTION_MARK_ATTENDANCE = "com.ankit.attendwise.ACTION_MARK_ATTENDANCE"
         const val ACTION_MARK_CANCELLED = "com.ankit.attendwise.ACTION_MARK_CANCELLED"
         const val EXTRA_SUBJECT_ID = "EXTRA_SUBJECT_ID"
@@ -33,66 +34,65 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     private fun handleMarkAttendance(context: Context, intent: Intent) {
         val pendingResult = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
-                val isPresent = intent.getBooleanExtra(EXTRA_IS_PRESENT, false)
-                val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
-                val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
+                actionMutex.withLock {
+                    val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
+                    val isPresent = intent.getBooleanExtra(EXTRA_IS_PRESENT, false)
+                    val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
+                    val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
 
-                if (subjectId.isNotEmpty()) {
-                    val dao = AppDatabase.getDatabase(context).attendanceDao()
-                    val cloudSyncManager = CloudSyncManager(context)
-                    val today = LocalDate.now().toEpochDay()
+                    if (subjectId.isNotEmpty()) {
+                        val dao = AppDatabase.getDatabase(context).attendanceDao()
+                        val cloudSyncManager = CloudSyncManager(context)
+                        val today = LocalDate.now().toEpochDay()
 
-                    // CRITICAL FIX: Check if today was marked as a holiday since the notification was shown
-                    val allDayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
-                    if (allDayRecords.any { it.type == RecordType.HOLIDAY }) {
-                        Log.d("NotificationReceiver", "Ignoring action: Today is a Holiday")
-                        NotificationHelper.cancelNotification(context, notificationId)
-                        return@launch
-                    }
-
-                    // Clean up existing records for this specific slot to prevent duplicates
-                    val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
-                    existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.forEach { record ->
-                        dao.deleteAttendanceRecord(record)
-                        cloudSyncManager.deleteAttendanceRecord(record.id)
-                    }
-
-                    val record = AttendanceRecord(
-                        id = java.util.UUID.randomUUID().toString(),
-                        subjectId = subjectId,
-                        scheduleId = scheduleId,
-                        date = today,
-                        isPresent = isPresent,
-                        note = "Marked from notification",
-                        type = RecordType.CLASS
-                    )
-                    dao.insertAttendanceRecord(record)
-                    cloudSyncManager.syncAttendanceRecord(record)
-
-                    val subject = dao.getSubjectById(subjectId)
-                    val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
-
-                    if (subject != null) {
-                        val total = dao.getTotalClassesForSubject(subjectId)
-                        val present = dao.getPresentClassesForSubject(subjectId)
-                        val newPercentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
-
-                        // This will now resolve correctly.
-                        NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, newPercentage, notificationId, false)
-
-                        if (newPercentage < subject.targetAttendance && total > 0) {
-                            // This will now resolve correctly.
-                            NotificationHelper.showAttendanceWarningNotification(context, subject, newPercentage)
+                        val allDayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
+                        if (allDayRecords.any { it.type == RecordType.HOLIDAY }) {
+                            NotificationHelper.cancelNotification(context, notificationId)
+                            return@withLock
                         }
 
-                        if (schedule != null) {
-                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                        val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
+                        existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.forEach { record ->
+                            dao.deleteAttendanceRecord(record)
+                            cloudSyncManager.deleteAttendanceRecord(record.id)
+                        }
+
+                        val record = AttendanceRecord(
+                            id = java.util.UUID.randomUUID().toString(),
+                            subjectId = subjectId,
+                            scheduleId = scheduleId,
+                            date = today,
+                            isPresent = isPresent,
+                            note = "Marked from notification",
+                            type = RecordType.CLASS
+                        )
+                        dao.insertAttendanceRecord(record)
+                        cloudSyncManager.syncAttendanceRecord(record)
+
+                        val subject = dao.getSubjectById(subjectId)
+                        val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
+
+                        if (subject != null) {
+                            val total = dao.getTotalClassesForSubject(subjectId)
+                            val present = dao.getPresentClassesForSubject(subjectId)
+                            val newPercentage = if (total > 0) (present.toDouble() / total) * 100.0 else 0.0
+
+                            NotificationHelper.showUpdatedAttendanceNotification(context, subject.name ?: "Subject", newPercentage, notificationId, false)
+
+                            if (newPercentage < (subject.targetAttendance ?: 75) && total > 0) {
+                                NotificationHelper.showAttendanceWarningNotification(context, subject, newPercentage)
+                            }
+
+                            if (schedule != null) {
+                                AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                            }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("NotificationReceiver", "Error marking attendance: ${e.message}")
             } finally {
                 pendingResult.finish()
             }
@@ -101,56 +101,56 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
     private fun handleMarkCancelled(context: Context, intent: Intent) {
         val pendingResult = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
-                val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
-                val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
+                actionMutex.withLock {
+                    val subjectId = intent.getStringExtra(EXTRA_SUBJECT_ID) ?: ""
+                    val scheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
+                    val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
 
-                if (subjectId.isNotEmpty()) {
-                    val dao = AppDatabase.getDatabase(context).attendanceDao()
-                    val cloudSyncManager = CloudSyncManager(context)
-                    val today = LocalDate.now().toEpochDay()
+                    if (subjectId.isNotEmpty()) {
+                        val dao = AppDatabase.getDatabase(context).attendanceDao()
+                        val cloudSyncManager = CloudSyncManager(context)
+                        val today = LocalDate.now().toEpochDay()
 
-                    // CRITICAL FIX: Check if today was marked as a holiday since the notification was shown
-                    val allDayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
-                    if (allDayRecords.any { it.type == RecordType.HOLIDAY }) {
-                        Log.d("NotificationReceiver", "Ignoring action: Today is a Holiday")
-                        NotificationHelper.cancelNotification(context, notificationId)
-                        return@launch
-                    }
+                        val allDayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
+                        if (allDayRecords.any { it.type == RecordType.HOLIDAY }) {
+                            NotificationHelper.cancelNotification(context, notificationId)
+                            return@withLock
+                        }
 
-                    // Clean up existing records for this specific slot to prevent duplicates
-                    val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
-                    existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.forEach { record ->
-                        dao.deleteAttendanceRecord(record)
-                        cloudSyncManager.deleteAttendanceRecord(record.id)
-                    }
+                        val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
+                        existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.forEach { record ->
+                            dao.deleteAttendanceRecord(record)
+                            cloudSyncManager.deleteAttendanceRecord(record.id)
+                        }
 
-                    val record = AttendanceRecord(
-                        id = java.util.UUID.randomUUID().toString(),
-                        subjectId = subjectId,
-                        scheduleId = scheduleId,
-                        date = today,
-                        isPresent = false,
-                        note = "Class Cancelled",
-                        type = RecordType.CANCELLED
-                    )
-                    dao.insertAttendanceRecord(record)
-                    cloudSyncManager.syncAttendanceRecord(record)
+                        val record = AttendanceRecord(
+                            id = java.util.UUID.randomUUID().toString(),
+                            subjectId = subjectId,
+                            scheduleId = scheduleId,
+                            date = today,
+                            isPresent = false,
+                            note = "Class Cancelled",
+                            type = RecordType.CANCELLED
+                        )
+                        dao.insertAttendanceRecord(record)
+                        cloudSyncManager.syncAttendanceRecord(record)
 
-                    val subject = dao.getSubjectById(subjectId)
-                    val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
+                        val subject = dao.getSubjectById(subjectId)
+                        val schedule = dao.getSchedulesForSubject(subjectId).firstOrNull { it.id == scheduleId }
 
-                    if (subject != null) {
-                        // This will now resolve correctly.
-                        NotificationHelper.showUpdatedAttendanceNotification(context, subject.name, 0.0, notificationId, true)
+                        if (subject != null) {
+                            NotificationHelper.showUpdatedAttendanceNotification(context, subject.name ?: "Subject", 0.0, notificationId, true)
 
-                        if (schedule != null) {
-                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                            if (schedule != null) {
+                                AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                            }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("NotificationReceiver", "Error marking cancelled: ${e.message}")
             } finally {
                 pendingResult.finish()
             }

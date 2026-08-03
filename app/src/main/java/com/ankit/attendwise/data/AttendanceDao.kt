@@ -6,6 +6,7 @@ package com.ankit.attendwise.data
 
 import androidx.room.*
 import com.ankit.attendwise.models.AttendanceRecordWithSubject
+import com.ankit.attendwise.models.AttendanceStatistics
 import com.ankit.attendwise.models.SubjectWithAttendance
 import kotlinx.coroutines.flow.Flow
 
@@ -27,6 +28,9 @@ interface AttendanceDao {
 
     @Query("SELECT COUNT(*) FROM subjects")
     suspend fun getSubjectCount(): Int
+
+    @Query("DELETE FROM subjects WHERE id = :subjectId")
+    suspend fun deleteSubjectById(subjectId: String)
 
     @Query("DELETE FROM subjects")
     suspend fun deleteAllSubjects()
@@ -53,6 +57,12 @@ interface AttendanceDao {
 
     @Query("SELECT * FROM class_schedules WHERE dayOfWeek = :dayOfWeek")
     suspend fun getSchedulesForDayNow(dayOfWeek: Int): List<ClassSchedule>
+
+    @Query("SELECT * FROM class_schedules WHERE id = :scheduleId")
+    suspend fun getScheduleById(scheduleId: String): ClassSchedule?
+
+    @Query("DELETE FROM class_schedules WHERE id = :scheduleId")
+    suspend fun deleteScheduleById(scheduleId: String)
 
     @Query("DELETE FROM class_schedules")
     suspend fun deleteAllSchedules()
@@ -109,6 +119,9 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE date = :date AND type = 'HOLIDAY'")
     suspend fun deleteHolidayOnDate(date: Long)
 
+    @Query("SELECT EXISTS(SELECT 1 FROM attendance_records WHERE date = :date AND type = 'HOLIDAY')")
+    fun isDateHolidayFlow(date: Long): Flow<Boolean>
+
     @Query("DELETE FROM attendance_records WHERE date = :date AND type != 'HOLIDAY'")
     suspend fun deleteAttendanceRecordsOnDate(date: Long)
 
@@ -128,6 +141,21 @@ interface AttendanceDao {
     @Query("DELETE FROM attendance_records WHERE subjectId = :subjectId")
     suspend fun deleteAttendanceRecordsForSubject(subjectId: String)
 
+    @Query("DELETE FROM attendance_records WHERE id = :recordId")
+    suspend fun deleteAttendanceRecordById(recordId: String)
+
+    @Transaction
+    suspend fun markHolidayTransaction(date: Long, holidayRecord: AttendanceRecord) {
+        deleteAttendanceRecordsOnDate(date)
+        insertAttendanceRecord(holidayRecord)
+    }
+
+    @Transaction
+    suspend fun markAttendanceTransaction(recordIdsToClean: List<String>, newRecord: AttendanceRecord) {
+        recordIdsToClean.forEach { deleteAttendanceRecordById(it) }
+        insertAttendanceRecord(newRecord)
+    }
+
     @Query("DELETE FROM attendance_records")
     suspend fun deleteAllAttendanceRecords()
 
@@ -144,6 +172,18 @@ interface AttendanceDao {
 
     @Query("SELECT COUNT(*) FROM attendance_records WHERE subjectId = :subjectId AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')")
     suspend fun getPresentClassesForSubject(subjectId: String): Int
+
+    @Query("""
+        SELECT 
+            COUNT(*) as totalClasses,
+            COALESCE(SUM(CASE WHEN isPresent = 1 THEN 1 ELSE 0 END), 0) as totalPresent,
+            (COUNT(*) - COALESCE(SUM(CASE WHEN isPresent = 1 THEN 1 ELSE 0 END), 0)) as totalAbsent,
+            CASE WHEN COUNT(*) > 0 THEN (CAST(COALESCE(SUM(CASE WHEN isPresent = 1 THEN 1 ELSE 0 END), 0) AS REAL) / COUNT(*)) * 100.0 ELSE 0.0 END as overallPercentage,
+            (SELECT COUNT(*) FROM subjects) as subjectCount
+        FROM attendance_records 
+        WHERE type = 'CLASS' OR type = 'MANUAL'
+    """)
+    fun getOverallStatisticsFlow(): Flow<AttendanceStatistics>
 
     @Transaction
     @Query("""

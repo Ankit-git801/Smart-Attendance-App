@@ -209,7 +209,7 @@ fun DayDetailDialog(
                                 )
                                 allSubjects.forEach { subject ->
                                     DropdownMenuItem(
-                                        text = { Text(subject.name) },
+                                        text = { Text(subject.name ?: "Unknown") },
                                         onClick = {
                                             onConfirmCancelled(subject.id)
                                             showCancelMenu = false
@@ -386,7 +386,8 @@ fun AttendanceCalendar(
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
-                val dayRecords = recordsByDate[day.date.toEpochDay()] ?: emptyList()
+                val dateAsLong = day.date.toEpochDay()
+                val dayRecords = recordsByDate[dateAsLong] ?: emptyList()
                 Day(day.date, dayRecords, onDayClick)
             }
         )
