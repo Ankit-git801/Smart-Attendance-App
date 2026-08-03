@@ -7,6 +7,7 @@ import android.util.Log
 import com.ankit.attendwise.data.AppDatabase
 import com.ankit.attendwise.data.RecordType
 import com.ankit.attendwise.utils.AlarmScheduler
+import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_MANUAL
 import com.ankit.attendwise.utils.NotificationHelper
 import kotlinx.coroutines.*
 import java.time.LocalDate
@@ -36,14 +37,13 @@ class ReminderService : Service() {
                         // Check if we should show notification
                         val today = LocalDate.now().toEpochDay()
                         val todayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
-                        val isHoliday = todayRecords.any { it.type == RecordType.HOLIDAY }
                         val isAlreadyMarked = todayRecords.any { 
                             it.subjectId == subjectId && 
-                            (it.scheduleId == scheduleId || it.scheduleId == "-1") && 
+                            (it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL) && 
                             (it.type == RecordType.CLASS || it.type == RecordType.CANCELLED || it.type == RecordType.MANUAL) 
                         }
 
-                        if (!isHoliday && !isAlreadyMarked) {
+                        if (!isAlreadyMarked) {
                             Log.d(TAG, "Creating notification for ${subject.name}")
                             val notification = NotificationHelper.buildAttendanceNotification(
                                 applicationContext,
@@ -53,11 +53,9 @@ class ReminderService : Service() {
                             // Call startForeground to satisfy system requirements
                             startForeground(schedule.id.hashCode(), notification)
                         } else {
-                            Log.d(TAG, "Skipping notification (holiday or already marked)")
+                            Log.d(TAG, "Skipping notification (already marked)")
                             // Even if skipping, if we were started with startForegroundService, 
                             // we MUST call startForeground or the app will crash.
-                            // However, if we stop immediately, sometimes it's okay, but it's risky.
-                            // Safer: Show a very brief notification or just handle it in AlarmReceiver.
                             
                             // To be absolutely safe, we show the notification and then immediately stop
                             val notification = NotificationHelper.buildAttendanceNotification(applicationContext, subject, schedule)

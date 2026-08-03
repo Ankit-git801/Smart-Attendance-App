@@ -93,6 +93,12 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
 
     val allSubjects by appViewModel.allSubjects.collectAsStateWithLifecycle()
 
+    val allAttendanceRecords by appViewModel.allAttendanceRecords.collectAsStateWithLifecycle()
+    val isTodayHoliday = remember(allAttendanceRecords) {
+        val todayEpoch = LocalDate.now().toEpochDay()
+        allAttendanceRecords.any { it.date == todayEpoch && it.type == RecordType.HOLIDAY }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -127,12 +133,25 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             )
         }
 
-        if (todaysSchedule.isEmpty()) {
+        if (isTodayHoliday) {
             item {
                 EmptyState(
                     icon = Icons.Default.WbSunny,
+                    title = "Public Holiday",
+                    subtitle = "Today is marked as a holiday. All classes are suspended. Enjoy your break!",
+                    actionLabel = "Remove Holiday",
+                    onActionClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        appViewModel.onHolidayToggleRequested(LocalDate.now()) 
+                    }
+                )
+            }
+        } else if (todaysSchedule.isEmpty()) {
+            item {
+                EmptyState(
+                    icon = Icons.Default.CalendarToday,
                     title = "No Classes Today",
-                    subtitle = "You have no classes scheduled for today. Enjoy your day off!"
+                    subtitle = "You have no classes scheduled for today."
                 )
             }
         } else {
@@ -302,7 +321,7 @@ fun GreetingCard(userName: String) {
                 
                 Column {
                     Text(
-                        text = "${greetingInfo.greetingText}, ${userName.ifEmpty { "Ankit" }} !",
+                        text = "${greetingInfo.greetingText}, ${userName.ifEmpty { "Student" }} !",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -438,9 +457,6 @@ fun TodayScheduleCard(
     appViewModel: AppViewModel,
     onClick: () -> Unit
 ) {
-    val processingIds by appViewModel.processingScheduleIds.collectAsStateWithLifecycle()
-    val isProcessing = processingIds.contains(scheduleWithSubject.schedule.id)
-    
     val record = scheduleWithSubject.attendanceRecord
     val haptic = LocalHapticFeedback.current
     
@@ -473,8 +489,7 @@ fun TodayScheduleCard(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
-                enabled = !isProcessing
+                onClick = onClick
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = RoundedCornerShape(24.dp),
@@ -555,47 +570,37 @@ fun TodayScheduleCard(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (isProcessing) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp
+                                FilledTonalButton(
+                                    onClick = { 
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        appViewModel.markTodayAsPresent(subject.id, schedule.id) 
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Present")
+                                }
+                                OutlinedButton(
+                                    onClick = { 
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        appViewModel.markTodayAsAbsent(subject.id, schedule.id) 
+                                    },
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Absent")
+                                }
+                                IconButton(
+                                    onClick = { 
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        appViewModel.markTodayAsCancelled(subject.id, schedule.id) 
+                                    },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
                                     )
-                                } else {
-                                    FilledTonalButton(
-                                        onClick = { 
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            appViewModel.markTodayAsPresent(subject.id, schedule.id) 
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        enabled = !isProcessing
-                                    ) {
-                                        Text("Present")
-                                    }
-                                    OutlinedButton(
-                                        onClick = { 
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            appViewModel.markTodayAsAbsent(subject.id, schedule.id) 
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        enabled = !isProcessing
-                                    ) {
-                                        Text("Absent")
-                                    }
-                                    IconButton(
-                                        onClick = { 
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            appViewModel.markTodayAsCancelled(subject.id, schedule.id) 
-                                        },
-                                        enabled = !isProcessing,
-                                        colors = IconButtonDefaults.iconButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.error
-                                        )
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Mark as Cancelled"
-                                        )
-                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Mark as Cancelled"
+                                    )
                                 }
                             }
                         }

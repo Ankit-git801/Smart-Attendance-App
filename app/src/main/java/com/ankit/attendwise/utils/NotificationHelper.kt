@@ -105,6 +105,11 @@ object NotificationHelper {
         notificationManager.notify(notificationId, notification)
     }
 
+    fun cancelNotification(context: Context, notificationId: Int) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(notificationId)
+    }
+
     private fun createActionIntent(context: Context, subjectId: String, scheduleId: String, notificationId: Int, isPresent: Boolean): PendingIntent {
         val intent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_MARK_ATTENDANCE

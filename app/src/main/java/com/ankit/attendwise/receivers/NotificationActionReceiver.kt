@@ -3,8 +3,10 @@ package com.ankit.attendwise.receivers
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.ankit.attendwise.data.*
 import com.ankit.attendwise.utils.AlarmScheduler
+import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_MANUAL
 import com.ankit.attendwise.utils.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,9 +45,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val cloudSyncManager = CloudSyncManager(context)
                     val today = LocalDate.now().toEpochDay()
 
+                    // CRITICAL FIX: Check if today was marked as a holiday since the notification was shown
+                    val allDayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
+                    if (allDayRecords.any { it.type == RecordType.HOLIDAY }) {
+                        Log.d("NotificationReceiver", "Ignoring action: Today is a Holiday")
+                        NotificationHelper.cancelNotification(context, notificationId)
+                        return@launch
+                    }
+
                     // Clean up existing records for this specific slot to prevent duplicates
                     val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
-                    existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == "-1" }.forEach { record ->
+                    existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.forEach { record ->
                         dao.deleteAttendanceRecord(record)
                         cloudSyncManager.deleteAttendanceRecord(record.id)
                     }
@@ -102,9 +112,17 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val cloudSyncManager = CloudSyncManager(context)
                     val today = LocalDate.now().toEpochDay()
 
+                    // CRITICAL FIX: Check if today was marked as a holiday since the notification was shown
+                    val allDayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
+                    if (allDayRecords.any { it.type == RecordType.HOLIDAY }) {
+                        Log.d("NotificationReceiver", "Ignoring action: Today is a Holiday")
+                        NotificationHelper.cancelNotification(context, notificationId)
+                        return@launch
+                    }
+
                     // Clean up existing records for this specific slot to prevent duplicates
                     val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
-                    existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == "-1" }.forEach { record ->
+                    existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.forEach { record ->
                         dao.deleteAttendanceRecord(record)
                         cloudSyncManager.deleteAttendanceRecord(record.id)
                     }

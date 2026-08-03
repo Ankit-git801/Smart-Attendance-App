@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 Ankit. All rights reserved.
+ */
+
 package com.ankit.attendwise.data
 
 import android.content.Context
@@ -54,16 +58,55 @@ class CloudSyncManager(private val context: Context) {
         }
     }
 
+    /**
+     * Checks Firestore for the latest version code.
+     * Required Setup: Create collection 'app_metadata', document 'version_info', 
+     * and a field 'latest_version_code' (Number).
+     */
+    data class AppUpdateInfo(
+        val latestVersionCode: Int = 1,
+        val isForceUpdate: Boolean = false
+    )
+
+    suspend fun getUpdateInfo(): AppUpdateInfo {
+        return try {
+            val doc = db.collection("app_metadata").document("version_info").get().await()
+            AppUpdateInfo(
+                latestVersionCode = doc.getLong("latest_version_code")?.toInt() ?: 1,
+                isForceUpdate = doc.getBoolean("is_force_update") ?: false
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Update check failed: ${e.message}")
+            AppUpdateInfo() 
+        }
+    }
+
     suspend fun deleteSubject(subjectId: String) {
         val userId = getUserId() ?: return
         try {
+            // 1. Delete the subject itself
             db.collection("users").document(userId)
                 .collection("subjects").document(subjectId)
                 .delete()
                 .await()
-            Log.d(TAG, "Subject deleted from cloud: $subjectId")
+            
+            // 2. Delete all attendance records associated with this subject
+            val records = db.collection("users").document(userId)
+                .collection("attendance_records")
+                .whereEqualTo("subjectId", subjectId)
+                .get().await()
+            
+            if (!records.isEmpty) {
+                val batch = db.batch()
+                for (doc in records.documents) {
+                    batch.delete(doc.reference)
+                }
+                batch.commit().await()
+            }
+            
+            Log.d(TAG, "Subject and its records deleted from cloud: $subjectId")
         } catch (e: Exception) {
-            Log.e(TAG, "Error deleting subject from cloud: ${e.message}")
+            Log.e(TAG, "Error deleting subject history from cloud: ${e.message}")
         }
     }
 
@@ -129,29 +172,28 @@ class CloudSyncManager(private val context: Context) {
                 .collection("subjects").get().await().toObjects(Subject::class.java)
             
             Log.d(TAG, "Fetched ${subjects.size} subjects from cloud")
-            for (subject in subjects) {
-                dao.insertSubject(subject)
-            }
 
             // 2. Restore Schedules
             val schedules = db.collection("users").document(userId)
                 .collection("schedules").get().await().toObjects(ClassSchedule::class.java)
             
             Log.d(TAG, "Fetched ${schedules.size} schedules from cloud")
-            for (schedule in schedules) {
-                dao.insertSchedule(schedule)
-            }
 
             // 3. Restore Attendance Records
             val records = db.collection("users").document(userId)
                 .collection("attendance_records").get().await().toObjects(AttendanceRecord::class.java)
             
             Log.d(TAG, "Fetched ${records.size} attendance records from cloud")
-            for (record in records) {
-                dao.insertAttendanceRecord(record)
+            records.forEach { record ->
+                if (record.type == RecordType.HOLIDAY) {
+                    Log.d(TAG, "Restoring HOLIDAY from cloud: Date=${java.time.LocalDate.ofEpochDay(record.date)}")
+                }
             }
+            
+            // Batch insert into local DB for performance and atomicity
+            dao.restoreDataBatch(subjects, schedules, records)
 
-            Log.d(TAG, "All data successfully restored from cloud")
+            Log.d(TAG, "All data successfully restored from cloud in a single transaction")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Error restoring data: ${e.message}", e)
@@ -162,20 +204,29 @@ class CloudSyncManager(private val context: Context) {
     suspend fun deleteAllCloudData() {
         val userId = getUserId() ?: return
         try {
-            // Delete all collections under the user
-            val subjects = db.collection("users").document(userId).collection("subjects").get().await()
-            for (doc in subjects.documents) doc.reference.delete().await()
-
-            val schedules = db.collection("users").document(userId).collection("schedules").get().await()
-            for (doc in schedules.documents) doc.reference.delete().await()
-
-            val records = db.collection("users").document(userId).collection("attendance_records").get().await()
-            for (doc in records.documents) doc.reference.delete().await()
+            val collections = listOf("subjects", "schedules", "attendance_records")
+            
+            for (collectionName in collections) {
+                val snapshot = db.collection("users").document(userId)
+                    .collection(collectionName).get().await()
+                
+                if (snapshot.isEmpty) continue
+                
+                // Firestore batches are limited to 500 operations
+                val chunks = snapshot.documents.chunked(450)
+                for (chunk in chunks) {
+                    val batch = db.batch()
+                    for (doc in chunk) {
+                        batch.delete(doc.reference)
+                    }
+                    batch.commit().await()
+                }
+            }
 
             // Delete the user profile document itself
             db.collection("users").document(userId).delete().await()
 
-            Log.d(TAG, "All cloud data deleted for user: $userId")
+            Log.d(TAG, "All cloud data deleted for user: $userId using batches")
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting cloud data: ${e.message}")
         }

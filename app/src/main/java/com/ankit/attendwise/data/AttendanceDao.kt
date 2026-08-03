@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 Ankit. All rights reserved.
+ */
+
 package com.ankit.attendwise.data
 
 import androidx.room.*
@@ -52,6 +56,29 @@ interface AttendanceDao {
 
     @Query("DELETE FROM class_schedules")
     suspend fun deleteAllSchedules()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSubjects(subjects: List<Subject>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSchedules(schedules: List<ClassSchedule>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAttendanceRecords(records: List<AttendanceRecord>)
+
+    @Transaction
+    suspend fun restoreDataBatch(
+        subjects: List<Subject>,
+        schedules: List<ClassSchedule>,
+        records: List<AttendanceRecord>
+    ) {
+        deleteAllSubjects()
+        deleteAllSchedules()
+        deleteAllAttendanceRecords()
+        insertSubjects(subjects)
+        insertSchedules(schedules)
+        insertAttendanceRecords(records)
+    }
 
 
     // --- Attendance Record Queries ---

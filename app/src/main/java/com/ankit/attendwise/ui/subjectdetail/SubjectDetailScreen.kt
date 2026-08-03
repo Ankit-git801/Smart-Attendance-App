@@ -4,6 +4,7 @@ package com.ankit.attendwise.ui.subjectdetail
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,6 +72,7 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
     val bunkAnalysis = remember(bunkAnalysisMap, subjectId) { bunkAnalysisMap[subjectId] }
 
     val attendanceRecords by appViewModel.getAttendanceRecordsForSubject(subjectId).collectAsStateWithLifecycle(initialValue = emptyList())
+    val allAttendanceRecords by appViewModel.allAttendanceRecords.collectAsStateWithLifecycle()
 
     var recordToDelete by remember { mutableStateOf<String?>(null) }
     var clearAllDateRecords by remember { mutableStateOf<LocalDate?>(null) }
@@ -146,15 +148,20 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
         val recordsForSelectedDate = remember(date, attendanceRecords) {
             attendanceRecords.filter { it.date == date.toEpochDay() }
         }
+        val isHoliday = allAttendanceRecords.any { it.date == date.toEpochDay() && it.type == RecordType.HOLIDAY }
         MarkAttendanceDialog(
             date = date,
             recordsForDay = recordsForSelectedDate,
+            isHoliday = isHoliday,
             onDismiss = { showMarkAttendanceDialog = null },
             onConfirm = { isPresent ->
                 appViewModel.updateAttendanceRecord(subjectId, date, isPresent)
             },
             onConfirmCancelled = {
                 appViewModel.markDateAsCancelled(subjectId, date)
+            },
+            onToggleHoliday = {
+                appViewModel.onHolidayToggleRequested(date)
             },
             onDeleteMain = { clearAllDateRecords = date },
             onDeleteRecord = { recordId -> recordToDelete = recordId },
@@ -212,7 +219,7 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                     fontWeight = FontWeight.Bold
                 )
 
-                AttendanceCalendar(attendanceRecords) { date ->
+                AttendanceCalendar(attendanceRecords, allAttendanceRecords) { date ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     showMarkAttendanceDialog = date
                 }
@@ -288,9 +295,11 @@ fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present: Int, a
 fun MarkAttendanceDialog(
     date: LocalDate,
     recordsForDay: List<AttendanceRecord>,
+    isHoliday: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (Boolean) -> Unit,
     onConfirmCancelled: () -> Unit,
+    onToggleHoliday: () -> Unit,
     onDeleteMain: () -> Unit,
     onDeleteRecord: (String) -> Unit,
     onAddExtra: (Boolean) -> Unit
@@ -303,6 +312,32 @@ fun MarkAttendanceDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (isHoliday) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = HolidayYellow.copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "This day is marked as a Public Holiday. Alarms are disabled and attendance cannot be marked.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = HolidayYellow,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { onToggleHoliday(); onDismiss() },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = HolidayYellow),
+                                border = BorderStroke(1.dp, HolidayYellow)
+                            ) {
+                                Text("Remove Holiday")
+                            }
+                        }
+                    }
+                }
+
                 if (recordsForDay.isEmpty()) {
                     Text("No attendance marked for this day.")
                 } else {
@@ -341,18 +376,19 @@ fun MarkAttendanceDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                Text("Quick Actions", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                AttendanceActionRow(Icons.Default.CheckCircle, "Mark Present", { onConfirm(true); onDismiss() }, true)
-                AttendanceActionRow(Icons.Default.Cancel, "Mark Absent", { onConfirm(false); onDismiss() }, false)
-                AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", { onAddExtra(true); onDismiss() }, true)
-                AttendanceActionRow(Icons.Default.RemoveCircle, "Add Extra Class (Absent)", { onAddExtra(false); onDismiss() }, false)
-                AttendanceActionRow(Icons.Default.EventBusy, "Mark as Cancelled", { onConfirmCancelled(); onDismiss() }, false, MaterialTheme.colorScheme.outline)
+                Text("Quick Actions", style = MaterialTheme.typography.labelLarge, color = if (isHoliday) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else MaterialTheme.colorScheme.primary)
+                AttendanceActionRow(Icons.Default.CheckCircle, "Mark Present", { onConfirm(true); onDismiss() }, true, enabled = !isHoliday)
+                AttendanceActionRow(Icons.Default.Cancel, "Mark Absent", { onConfirm(false); onDismiss() }, false, enabled = !isHoliday)
+                AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", { onAddExtra(true); onDismiss() }, true, enabled = !isHoliday)
+                AttendanceActionRow(Icons.Default.RemoveCircle, "Add Extra Class (Absent)", { onAddExtra(false); onDismiss() }, false, enabled = !isHoliday)
+                AttendanceActionRow(Icons.Default.EventBusy, "Mark as Cancelled", { onConfirmCancelled(); onDismiss() }, false, MaterialTheme.colorScheme.outline, enabled = !isHoliday)
             }
         },
         confirmButton = {
             Button(
                 onClick = onDeleteMain,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                enabled = recordsForDay.isNotEmpty()
             ) { Text("Clear Day") }
         },
         dismissButton = { 
@@ -365,18 +401,21 @@ fun MarkAttendanceDialog(
 }
 
 @Composable
-fun AttendanceActionRow(icon: ImageVector, label: String, onClick: () -> Unit, isPositive: Boolean, overrideColor: Color? = null) {
+fun AttendanceActionRow(icon: ImageVector, label: String, onClick: () -> Unit, isPositive: Boolean, overrideColor: Color? = null, enabled: Boolean = true) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(enabled = enabled) { onClick() }
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val tint = overrideColor ?: if (isPositive) SuccessGreen else ErrorRed
+        val baseColor = overrideColor ?: if (isPositive) SuccessGreen else ErrorRed
+        val tint = if (enabled) baseColor else baseColor.copy(alpha = 0.38f)
+        val textColor = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        
         Icon(icon, contentDescription = null, tint = tint)
         Spacer(Modifier.width(16.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = textColor)
     }
 }
 
@@ -510,6 +549,7 @@ fun AnimatedCircularProgress(
 
 @Composable
 fun AttendanceCalendar(
+    subjectRecords: List<AttendanceRecord>,
     allRecords: List<AttendanceRecord>,
     onDayClick: (LocalDate) -> Unit
 ) {
@@ -559,8 +599,9 @@ fun AttendanceCalendar(
         HorizontalCalendar(
             state = state,
             dayContent = { day ->
-                val dayRecords = allRecords.filter { it.date == day.date.toEpochDay() }
-                Day(day, dayRecords, onDayClick)
+                val dateRecords = subjectRecords.filter { it.date == day.date.toEpochDay() }
+                val isHoliday = allRecords.any { it.date == day.date.toEpochDay() && it.type == RecordType.HOLIDAY }
+                Day(day, dateRecords, isHoliday, onDayClick)
             }
         )
     }
@@ -570,9 +611,9 @@ fun AttendanceCalendar(
 fun Day(
     day: CalendarDay,
     records: List<AttendanceRecord>,
+    isHoliday: Boolean,
     onClick: (LocalDate) -> Unit
 ) {
-    val isHoliday = records.any { it.type == RecordType.HOLIDAY }
     val hasRecords = records.any { it.type != RecordType.HOLIDAY }
     val isToday = day.date == LocalDate.now()
 

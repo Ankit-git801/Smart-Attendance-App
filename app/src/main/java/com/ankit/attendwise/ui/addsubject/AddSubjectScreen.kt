@@ -37,8 +37,8 @@ data class UiClassSchedule(
 )
 
 val predefinedColors = listOf(
-    "#81C784", "#FF8A65", "#4FC3F7", "#F06292", "#FFD54F",
-    "#9575CD", "#4DB6AC", "#A1887F", "#7986CB"
+    "#4CAF50", "#81C784", "#2196F3", "#64B5F6", "#9C27B0",
+    "#BA68C8", "#E91E63", "#F06292", "#FF9800", "#FFB74D"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -224,25 +224,50 @@ fun AddSubjectScreen(
 
 @Composable
 private fun ColorPicker(selectedColor: String, onColorSelected: (String) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Subject Color", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(12.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(predefinedColors) { color ->
-                    val isSelected = color == selectedColor
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "Subject Color",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(16.dp))
+            
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                items(predefinedColors) { colorHex ->
+                    val isSelected = colorHex.lowercase() == selectedColor.lowercase()
+                    val color = Color(android.graphics.Color.parseColor(colorHex))
+                    
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(android.graphics.Color.parseColor(color)))
-                            .clickable { onColorSelected(color) }
+                            .background(color)
+                            .clickable { onColorSelected(colorHex) }
                             .border(
-                                width = if (isSelected) 2.dp else 0.dp,
+                                width = if (isSelected) 3.dp else 0.dp,
                                 color = if (isSelected) MaterialTheme.colorScheme.onSurface else Color.Transparent,
                                 shape = CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
                             )
-                    )
+                        }
+                    }
                 }
             }
         }

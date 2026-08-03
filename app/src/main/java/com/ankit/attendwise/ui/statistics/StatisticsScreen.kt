@@ -39,15 +39,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
     val subjectsWithAttendance by appViewModel.subjectsWithAttendance.collectAsStateWithLifecycle()
-    var stats by remember { mutableStateOf<AttendanceStatistics?>(null) }
-    val coroutineScope = rememberCoroutineScope()
+    val stats by appViewModel.overallStatistics.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
-
-    LaunchedEffect(subjectsWithAttendance) {
-        coroutineScope.launch {
-            stats = appViewModel.getOverallStatistics()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -67,12 +60,7 @@ fun StatisticsScreen(navController: NavController, appViewModel: AppViewModel) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    stats?.let {
-                        OverallPerformanceCard(it)
-                    } ?: Box(
-                        Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) { CircularProgressIndicator() }
+                    OverallPerformanceCard(stats)
                 }
 
                 item {

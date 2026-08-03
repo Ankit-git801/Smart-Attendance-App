@@ -32,6 +32,8 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.ankit.attendwise.viewmodel.AppViewModel
 
+import android.widget.Toast
+
 @Composable
 fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -120,6 +122,22 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                     icon = { Icon(Icons.Default.DateRange, contentDescription = "Weekly Schedule") },
                     onClick = { navController.navigate("weekly_schedule") }
                 )
+                SettingsItem(
+                    title = "Send Feedback",
+                    subtitle = "Report bugs or suggest features",
+                    icon = { Icon(Icons.Default.Feedback, contentDescription = "Feedback") },
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:ak8485332@gmail.com")
+                            putExtra(Intent.EXTRA_SUBJECT, "AttendWise Feedback")
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
             }
             item {
                 SettingsSectionTitle("Data Management")
@@ -175,6 +193,15 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                             }
                         }
                     }
+                )
+            }
+            item {
+                SettingsSectionTitle("About")
+                Text(
+                    text = "AttendWise v1.0\nCopyright © 2026 Ankit. All rights reserved.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
                 )
             }
         }

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Ankit. All rights reserved.
+ * Unauthorized copying of this file, via any medium is strictly prohibited
+ * Proprietary and confidential
+ */
+
 package com.ankit.attendwise
 
 import android.Manifest
@@ -12,6 +18,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.EnterTransition
@@ -37,6 +45,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.PermissionChecker
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -60,9 +70,9 @@ import com.ankit.attendwise.ui.theme.AttendWiseTheme
 import com.ankit.attendwise.ui.weeklysched.WeeklyScheduleScreen
 import com.ankit.attendwise.utils.NotificationHelper
 import com.ankit.attendwise.viewmodel.AppViewModel
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.isGranted
-import com.google.accompanist.permissions.rememberPermissionState
+import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +83,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val appViewModel: AppViewModel = viewModel()
+            val context = LocalContext.current
+
+            LaunchedEffect(Unit) {
+                appViewModel.attendanceActionFeedback.collectLatest { message ->
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                }
+            }
             
             // Keep the splash screen on screen until the onboarding state is loaded
             splashScreen.setKeepOnScreenCondition {
@@ -87,10 +104,65 @@ class MainActivity : ComponentActivity() {
             }
             AttendWiseTheme(darkTheme = useDarkTheme) {
                 RequestAllPermissions()
+                
+                val updateAvailable by appViewModel.updateAvailable.collectAsStateWithLifecycle()
+                val isForceUpdate by appViewModel.isForceUpdate.collectAsStateWithLifecycle()
+                var showUpdateDialog by remember { mutableStateOf(false) }
+                
+                LaunchedEffect(updateAvailable) {
+                    if (updateAvailable) showUpdateDialog = true
+                }
+
+                if (showUpdateDialog) {
+                    UpdateDialog(
+                        isForceUpdate = isForceUpdate,
+                        onDismiss = { if (!isForceUpdate) showUpdateDialog = false }
+                    )
+                }
+
                 AttendWiseApp(appViewModel = appViewModel)
             }
         }
     }
+}
+
+@Composable
+fun UpdateDialog(isForceUpdate: Boolean, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isForceUpdate) "Update Required" else "Update Available") },
+        text = { 
+            Text(
+                if (isForceUpdate) 
+                    "This version of AttendWise is no longer supported. Please update to the latest version from the Play Store to continue."
+                else 
+                    "A newer version of AttendWise is available. Please update to get the latest features and bug fixes."
+            ) 
+        },
+        confirmButton = {
+            Button(onClick = {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    data = Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+                    setPackage("com.android.vending")
+                }
+                try {
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")))
+                }
+            }) {
+                Text("Update Now")
+            }
+        },
+        dismissButton = {
+            if (!isForceUpdate) {
+                TextButton(onClick = onDismiss) {
+                    Text("Later")
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -102,14 +174,26 @@ fun RequestAllPermissions() {
     RequestManufacturerBatteryOptimization()
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun RequestNotificationPermission() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        val permissionState = rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS)
-        if (!permissionState.status.isGranted) {
+        val context = LocalContext.current
+        var hasPermission by remember {
+            mutableStateOf(
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PermissionChecker.PERMISSION_GRANTED
+            )
+        }
+
+        val launcher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+            onResult = { isGranted ->
+                hasPermission = isGranted
+            }
+        )
+
+        if (!hasPermission) {
             LaunchedEffect(Unit) {
-                permissionState.launchPermissionRequest()
+                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }

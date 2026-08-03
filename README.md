@@ -1,87 +1,82 @@
 # 📱 AttendWise App ✨📚
 
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://developer.android.com/)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg)](https://kotlinlang.org/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.4+-blue.svg)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/UI-Jetpack--Compose-orange.svg)](https://developer.android.com/jetpack/compose)
 [![Firebase](https://img.shields.io/badge/Backend-Firebase-red.svg)](https://firebase.google.com/)
 
-**Offline-first, cloud-synced, modern Android app** to track class attendance, hit academic targets, and manage schedules—built with Kotlin and 100% Jetpack Compose.
+**Offline-first, cloud-synced, modern Android app** designed to help students master their attendance, hit academic targets, and manage complex weekly schedules—built with Kotlin and 100% Jetpack Compose.
 
-⚡ **Why this project?**
-Most students struggle with tracking attendance against university requirements. This app provides reliable, automated tracking that works fully offline, with smart reminders, real-time cloud backup, and advanced progress analytics.
+⚡ **Why AttendWise?**
+Managing attendance requirements across multiple subjects is a mental burden. AttendWise provides a professional, automated solution that works fully offline, featuring smart reminders, atomic cloud backup, and precision mathematical analytics.
 
 ---
 
 ## 🌟 Highlights
 
-- 🎯 **Target-Driven Tracking** → Subject-wise goals with animated progress bars & visual analytics.
-- ☁️ **Real-Time Cloud Sync** → Instant Firestore synchronization for subjects, schedules, and records.
-- 🔐 **Hybrid Authentication** → Secure Email/Password login with automated background data restoration.
-- 🗓️ **Interactive Calendar** → New month-navigation arrows with color-coded history (Green: Present, Red: Absent, Gray: Cancelled).
-- 🔴 **"LIVE" State Engine** → Real-time identification of active classes based on system time and schedules.
-- 🌴 **Holiday Management** → One-tap holiday toggle that intelligently clears data conflicts across local and cloud.
-- ⏰ **Reliable Reminders** → Exact alarms + actionable notifications that survive reboots and battery optimizations.
-- 👋 **Personalized Onboarding** → Welcoming name-based setup with an option to restore existing cloud accounts.
-- ✨ **Modern UX** → AMOLED black theme, glassmorphism effects, fluid animations, and haptic feedback.
-- 🛡️ **Safe Operations** → Integrated confirmation dialogs for all destructive actions (Delete/Sign-out/Clear).
+- 🎯 **Target-Driven Tracking** → Set subject goals and let the app handle the math.
+- ☁️ **Atomic Cloud Sync** → Real-time Firestore synchronization with transactional data restoration.
+- 🔐 **Secure Authentication** → Firebase-powered Email/Password login with proprietary data protection.
+- 🗓️ **Interactive Calendar** → Comprehensive history view with month-navigation and holiday markers.
+- 📉 **Precision Bunk Analysis** → Uses direct mathematical formulas (O(1) complexity) to calculate exactly how many classes you can skip or must attend.
+- 🌴 **Smart Holiday Management** → One-tap holiday toggle with automatic cloud cleanup and alarm rescheduling.
+- ⏰ **Reliable Reminders** → Exact alarms and actionable notifications that survive reboots and aggressive battery optimizations.
+- 🚀 **In-App Update System** → Remote-controlled "Force Update" mechanism to ensure all users are on the latest version.
+- ✨ **Modern UX** → Glassmorphism (Haze), fluid animations, haptic feedback, and AMOLED support.
+- 🛡️ **IP Protected** → Explicit copyright headers and proprietary licensing.
 
 ---
 
-## 🛠 Tech Stack
+## 🛠 Tech Stack (2026 Edition)
 
 - **UI Layer:** Jetpack Compose (Material 3), Compose Animation API, Haze (Glassmorphism).
-- **Architecture:** MVVM + StateFlow + Kotlin Coroutines (Reactive UI flow).
-- **Local Storage:** Room Persistence Library (v2.6.1) with Offline-first architecture.
+- **Architecture:** MVVM + StateFlow + Kotlin Coroutines (Reactive UI).
+- **Local Storage:** Room Persistence Library (v2.8.4) with atomic transactions.
 - **Backend:** Firebase Authentication & Cloud Firestore (NoSQL).
-- **Preferences:** Jetpack DataStore (v1.1.1).
-- **Navigation:** Jetpack Navigation Compose (v2.7.7).
+- **Preferences:** Jetpack DataStore (v1.2.1).
+- **Gradle:** AGP 9.3.1 + Kotlin 2.4.10 + KSP.
 - **Reminders:** AlarmManager (Exact Alarms) + Broadcast Receivers + Boot Compatibility.
-- **Calendar UI:** Kizitonwose Calendar for Compose.
 
 ---
 
 ## 🏗 System Design & Architecture
 
-- **Distributed Data Logic:** A multi-layered strategy where the app operates on Room for offline speed and propagates changes to Firestore for cloud reliability.
-- **Automated State Restoration:** Engineering a silent restoration process that rebuilds the local environment immediately upon login.
-- **Bunk Analysis Algorithm:** Sophisticated mathematical model calculating exactly how many classes can be missed or must be attended to meet goals.
-- **Boot-Resilient Scheduling:** Logic to re-register all exact alarms upon `BOOT_COMPLETED` and app updates.
-- **Firestore Integrity:** Custom PropertyName mapping to ensure complex Boolean states (isPresent) survive cloud serialization.
+- **Transactional Restoration:** A robust cloud-to-local restoration engine that uses database transactions to ensure data integrity during account recovery.
+- **Optimized Calculation Engine:** Replaced iterative simulations with closed-form mathematical models for real-time bunk analysis calculations.
+- **Service Efficiency:** Smart `AlarmReceiver` logic that prevents unnecessary foreground service starts on holidays, significantly improving battery life.
+- **Dual-Mode Updates:** Backend-controlled update logic allowing for either "Optional" or "Mandatory" application upgrades.
+- **Manufacturer Guidance:** Custom logic to guide users through aggressive battery optimization settings on specific devices (OnePlus, Oppo, etc.).
 
 ---
 
 ## 📲 Core Screens
 
-- **Home** → Personalized greeting, dynamic "Today's Schedule," and one-tap attendance markers.
+- **Home** → Dynamic "Today's Schedule," real-time attendance actions, and holiday status.
+- **Statistics** → Reactive, flicker-free dashboard showing overall and subject-specific performance.
 - **Calendar** → Visual month-by-month history with detailed day-view dialogs.
-- **Statistics** → Comprehensive breakdown of subject performance vs. targets.
-- **Subject Details** → Deep-dive history, schedule editing, and manual backfill options.
-- **Settings** → Cloud account management, theme customization, and system permission checks.
+- **Subject Details** → Deep-dive history, schedule management, and manual record backfilling.
+- **Settings** → Cloud backup status, theme customization, and user feedback portal.
 
 ---
 
-## 🔑 Permissions Used
+## 🔑 Permissions & Security
 
-- `POST_NOTIFICATIONS`: Android 13+ support for reminders.
-- `SCHEDULE_EXACT_ALARM`: Ensuring notifications fire at the precise class end time.
-- `RECEIVE_BOOT_COMPLETED`: Restoring the scheduling engine after device restarts.
-- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: Preventing the system from killing reminder tasks.
+- `POST_NOTIFICATIONS`: Android 13+ support for attendance reminders.
+- `SCHEDULE_EXACT_ALARM`: High-precision class-end notification triggers.
+- `RECEIVE_BOOT_COMPLETED`: Automatic scheduling engine restoration after device restarts.
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: Critical for reliable foreground tasks.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Deployment & Distribution
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Ankit-git801/Smart-Attendance-App.git
-   ```
-2. **Firebase Setup:**
-   - Create a Firebase project and enable **Email/Password Auth** and **Firestore**.
-   - Download `google-services.json` and place it in the `/app` directory.
-3. **Build:**
-   - Sync Gradle and Run the application on a device or emulator.
+### **Sharing with Users (Pre-Play Store)**
+1. Generate a **Signed Release APK** using your production Key Store.
+2. Upload to Google Drive and share the link.
+3. Once published to Play Store, update the `app_metadata/version_info` in Firebase to trigger the "Force Update" for all Drive users.
 
 ---
 
 ## 📄 License
-This project is licensed under the **MIT License**.
+Copyright (c) 2026 Ankit. All rights reserved.  
+**Proprietary and Confidential.** Unauthorized copying, modification, or distribution of this software is strictly prohibited.
