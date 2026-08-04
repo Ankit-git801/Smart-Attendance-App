@@ -42,7 +42,7 @@ class NotificationDismissReceiver : BroadcastReceiver() {
                 if (!isMarked && !isHoliday) {
                     Log.d(TAG, "Notification swiped but not marked. Re-posting for $subjectId")
                     val subject = dao.getSubjectById(subjectId)
-                    val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
+                    val schedule = dao.getScheduleById(scheduleId)
                     
                     if (subject != null && schedule != null) {
                         NotificationHelper.showAttendanceNotification(context, subject, schedule)

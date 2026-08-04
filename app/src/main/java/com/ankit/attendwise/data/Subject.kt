@@ -9,7 +9,7 @@ import java.util.UUID
 @Entity(tableName = "subjects")
 data class Subject(
     @PrimaryKey
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = "",
     val name: String = "",
     val color: String = "#4CAF50",
     val targetAttendance: Int = 75,

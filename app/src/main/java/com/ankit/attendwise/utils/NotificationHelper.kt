@@ -92,7 +92,7 @@ object NotificationHelper {
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(subjectName)
             .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setTimeoutAfter(5000)
             .build()
 

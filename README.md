@@ -1,36 +1,54 @@
 # AttendWise 📱✨
 
-AttendWise is a modern, offline-first attendance management application built for Android. It helps students track their class attendance, meet academic targets, and manage weekly schedules with ease using a sleek, intuitive interface.
+AttendWise is a professional, high-integrity attendance management application for Android. Built with a "Gold Master" philosophy, it offers a robust, conflict-resilient environment for students to track their academic targets with 100% data reliability.
 
-## 🌟 Key Features
+## 🌟 Core Features
 
-*   🎯 **Smart Attendance Goals:** Set custom target percentages for each subject.
-*   📊 **Deep Analytics:** Instant calculations on how many classes you can "bunk" or must attend to stay on track.
-*   ⏰ **Persistent Reminders:** Actionable notifications triggered at the end of every class to ensure you never forget to mark attendance.
-*   ☁️ **Cloud Synchronization:** Securely back up and sync your data across devices using Firebase.
-*   🗓️ **Comprehensive Calendar:** A visual history of your attendance, including holiday management and manual record editing.
-*   🌙 **Modern UI/UX:** Built with Jetpack Compose featuring Material 3 design, fluid animations, and support for both Light and Dark themes.
-*   🚀 **Performance First:** Optimized for battery efficiency and high-speed data processing using reactive SQL queries. Works fully offline.
+*   🎯 **Attendance Targeting:** Set personalized goals (e.g., 75%, 85%) for each subject.
+*   📊 **Bunk Analysis:** Advanced mathematical engine that calculates exactly how many classes you can safely miss or must attend to reach your target.
+*   ⏰ **Intelligent Reminders:** Automated notifications fire precisely at the end of your scheduled classes.
+*   ☁️ **Hardened Cloud Sync:** Seamless real-time synchronization across multiple devices with built-in conflict resolution and atomic transactions.
+*   🗓️ **Dynamic Calendar:** A complete visual history of your attendance, including public holiday management and class cancellation support.
+*   🚀 **High Performance:** Optimized for the latest Android versions, featuring extremely low battery impact and buttery-smooth Jetpack Compose UI.
+
+## 🛡️ Professional Hardening (Audit Phases)
+
+The codebase has undergone 13 rigorous phases of architectural refinement and stress-testing:
+
+### 1. Data Integrity & Safety
+*   **Safe Upsert Engine:** Prevented data loss during subject edits by replacing destructive `REPLACE` operations with high-integrity `upsert` logic.
+*   **Strict Foreign Keys:** Every attendance record and class schedule is strictly linked in the database, preventing "orphaned" or corrupted data.
+*   **Non-Destructive Migrations:** Professional migration scripts preserve local history during app updates, ensuring data safety for both online and offline users.
+
+### 2. Reliability & Resilience
+*   **Self-Healing Reminders:** A startup routine that automatically verifies and repairs system alarms every time the app is opened.
+*   **Global Time Support:** Listeners for Time Zone changes and manual clock updates ensure reminders are always aligned with your local time.
+*   **Battery Saver Compatibility:** Integrated custom guidance for aggressive manufacturers (Samsung, Xiaomi, Vivo, Oppo) to ensure 100% reminder delivery.
+
+### 3. Logic & Accuracy
+*   **Conflict Detection:** Built-in validation prevents overlapping class schedules across different subjects.
+*   **Holiday Intelligence:** The app correctly "leap-frogs" reminders to the following week when a holiday is marked, maintaining the weekly chain.
+*   **Mathematical Edge Cases:** Formulas are hardened against "100% target" scenarios to prevent division-by-zero crashes.
+
+### 4. Advanced UX
+*   **Buffered Navigation:** Uses Kotlin Channels to handle deep-links from notifications, ensuring the correct screen opens instantly even during a cold start.
+*   **Silent Action Updates:** Notification interactions are silent and fast, providing immediate feedback without redundant "ping" sounds.
+*   **Tactile Polish:** Integrated haptic feedback and clear success confirmations for all manual user actions.
 
 ## 🛠 Tech Stack
 
 *   **Language:** Kotlin
 *   **UI Toolkit:** Jetpack Compose (Material 3)
-*   **Database:** Room Persistence Library (SQLite) with high-performance SQL aggregations.
-*   **Backend:** Firebase Authentication & Cloud Firestore
-*   **Architecture:** MVVM (Model-View-ViewModel) with Kotlin Coroutines and Flow
-*   **Preferences:** Jetpack DataStore
-
-## 📲 Screenshots
-
-*(Coming Soon)*
+*   **Database:** Room (SQLite) with Reactive Flow and high-precision SQL joins.
+*   **Backend:** Firebase Authentication & Cloud Firestore (Real-time listener architecture).
+*   **Concurrency:** Kotlin Coroutines with specialized Mutex protection for sync operations.
+*   **Analytics:** Firebase Analytics for feature usage tracking.
 
 ## 🛡 Permissions
 
-To provide the best experience, AttendWise requires:
-*   **Notifications:** For class reminders.
-*   **Exact Alarms:** For precise notification timing.
-*   **Battery Optimization Bypass:** To ensure reminders trigger reliably on all devices.
+*   **POST_NOTIFICATIONS:** To deliver class reminders.
+*   **SCHEDULE_EXACT_ALARM:** For millisecond-precise reminder timing.
+*   **REQUEST_IGNORE_BATTERY_OPTIMIZATIONS:** To keep reminders active on aggressive battery-saving devices.
 
 ---
 

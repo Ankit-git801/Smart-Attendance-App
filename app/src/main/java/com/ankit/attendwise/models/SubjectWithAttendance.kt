@@ -1,5 +1,6 @@
 package com.ankit.attendwise.models
 
+import androidx.annotation.Keep
 import androidx.compose.runtime.Immutable
 import androidx.room.Embedded
 import com.ankit.attendwise.data.Subject
@@ -12,6 +13,7 @@ import com.ankit.attendwise.data.Subject
  * @property totalClasses The total number of classes recorded for this subject.
  * @property presentClasses The number of classes marked as present.
  */
+@Keep
 @Immutable
 data class SubjectWithAttendance(
     @Embedded val subject: Subject,

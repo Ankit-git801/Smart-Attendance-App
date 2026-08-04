@@ -11,6 +11,14 @@ import com.google.firebase.firestore.PropertyName
 @Keep
 @Entity(
     tableName = "attendance_records",
+    foreignKeys = [
+        androidx.room.ForeignKey(
+            entity = Subject::class,
+            parentColumns = ["id"],
+            childColumns = ["subjectId"],
+            onDelete = androidx.room.ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["subjectId"]),
         Index(value = ["date"])
@@ -18,7 +26,7 @@ import com.google.firebase.firestore.PropertyName
 )
 data class AttendanceRecord(
     @PrimaryKey
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = "",
     val subjectId: String = "",
     val scheduleId: String = "",
     val date: Long = 0,

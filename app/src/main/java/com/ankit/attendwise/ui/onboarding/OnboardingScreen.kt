@@ -24,6 +24,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.ankit.attendwise.R
 import com.ankit.attendwise.ui.settings.AuthDialog
 import com.ankit.attendwise.ui.theme.PoppinsFamily
 import com.ankit.attendwise.viewmodel.AppViewModel
@@ -105,7 +107,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                     when (step) {
                         OnboardingStep.WELCOME -> {
                             Text(
-                                text = "Welcome to\nAttendWise",
+                                text = stringResource(R.string.welcome_title),
                                 style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
@@ -114,7 +116,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "Stay organized and never miss a target. Choose how you want to start.",
+                                text = stringResource(R.string.welcome_subtitle),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -129,7 +131,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
                                 shape = RoundedCornerShape(24.dp)
                             ) {
-                                Text("Sign Up", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(stringResource(R.string.action_sign_up), fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             }
                             
                             Spacer(modifier = Modifier.height(16.dp))
@@ -144,7 +146,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                             ) {
                                 Icon(Icons.Default.Login, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Sign In", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(stringResource(R.string.action_sign_in), fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             }
 
                             Spacer(modifier = Modifier.height(24.dp))
@@ -153,7 +155,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                                 onClick = { currentStep = OnboardingStep.NAME_INPUT },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Sign Up Later (Offline Mode)", style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(R.string.action_signup_later), style = MaterialTheme.typography.bodyMedium)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                             }
@@ -161,7 +163,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
 
                         OnboardingStep.NAME_INPUT -> {
                             Text(
-                                text = "Personalize Your App",
+                                text = stringResource(R.string.personalize_title),
                                 style = MaterialTheme.typography.headlineLarge,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
@@ -169,7 +171,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = "What should we call you?",
+                                text = stringResource(R.string.personalize_subtitle),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -178,7 +180,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                             OutlinedTextField(
                                 value = name,
                                 onValueChange = { name = it },
-                                label = { Text("Enter Your Name") },
+                                label = { Text(stringResource(R.string.label_enter_name)) },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
@@ -207,7 +209,7 @@ fun OnboardingScreen(appViewModel: AppViewModel, onComplete: () -> Unit) {
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
                                 shape = RoundedCornerShape(24.dp)
                             ) {
-                                Text("Get Started", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(stringResource(R.string.action_get_started), fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             }
                         }
                     }

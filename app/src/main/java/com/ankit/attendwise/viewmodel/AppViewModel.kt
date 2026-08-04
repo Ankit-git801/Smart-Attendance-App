@@ -22,11 +22,16 @@ import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_MANUAL
 import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_PAST
 import com.ankit.attendwise.utils.Constants.ID_SUBJECT_HOLIDAY
 import com.ankit.attendwise.utils.NotificationHelper
+import com.ankit.attendwise.R
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.analytics.logEvent
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.time.LocalDate
+import kotlin.math.ceil
 import java.util.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -35,6 +40,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val attendanceDao = AppDatabase.getDatabase(application).attendanceDao()
     private val preferencesManager = PreferencesManager(application)
     private val cloudSyncManager = CloudSyncManager(application)
+    private val firebaseAnalytics = FirebaseAnalytics.getInstance(application)
 
     val allAttendanceRecords: StateFlow<List<AttendanceRecord>> = attendanceDao.getAllAttendanceRecords()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -45,6 +51,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val subjectsWithAttendance: StateFlow<List<SubjectWithAttendance>> =
         attendanceDao.getSubjectsWithAttendance()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allSchedules: StateFlow<List<ClassSchedule>> = attendanceDao.getAllSchedules()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val theme = preferencesManager.themeFlow.stateIn(
         viewModelScope,
@@ -63,11 +72,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         null
     )
 
-    // REACIVE DATE: Updates every minute to handle midnight transitions
+    // REACIVE DATE: Updates every 30 seconds to handle midnight and "Live" class badge transitions
     val currentDate: StateFlow<LocalDate> = flow {
         while (true) {
             emit(LocalDate.now())
-            kotlinx.coroutines.delay(60_000) // Check every minute
+            kotlinx.coroutines.delay(30_000) // 30 seconds for better "Live" badge accuracy
         }
     }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LocalDate.now())
@@ -89,12 +98,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _attendanceActionFeedback = MutableSharedFlow<String>()
     val attendanceActionFeedback = _attendanceActionFeedback.asSharedFlow()
 
-
     private val _showHolidayDialog = MutableStateFlow<LocalDate?>(null)
-    val showHolidayDialog: StateFlow<LocalDate?> = _showHolidayDialog.asStateFlow()
 
     private val _updateAvailable = MutableStateFlow(false)
     val updateAvailable: StateFlow<Boolean> = _updateAvailable.asStateFlow()
+
+    private val _navigationEvents = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.BUFFERED)
+    val navigationEvents = _navigationEvents.receiveAsFlow()
 
     private val _isForceUpdate = MutableStateFlow(false)
     val isForceUpdate: StateFlow<Boolean> = _isForceUpdate.asStateFlow()
@@ -103,6 +113,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Start real-time sync if user is already logged in
         if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) {
             cloudSyncManager.startRealTimeSync(attendanceDao, viewModelScope)
+        }
+
+        // SELF-HEALING: Reschedule all alarms on startup in background to ensure system consistency
+        viewModelScope.launch(Dispatchers.IO) {
+            rescheduleAllAlarms()
         }
 
         viewModelScope.launch {
@@ -144,8 +159,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         
         // BOUNDARY CHECK: Target 100%
         if (target >= 100.0) {
-            return if (attended == total) BunkAnalysis(0, 0) 
-            else BunkAnalysis(0, Int.MAX_VALUE) // Can never reach 100% if even one class is missed
+            // Fix division by zero if target is 100
+            return if (attended >= total) BunkAnalysis(0, 0) 
+            else BunkAnalysis(0, 999) // User-friendly 'Impossible' cap
         }
 
         val currentPercentage = (attended.toDouble() / total) * 100.0
@@ -156,7 +172,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             BunkAnalysis(classesToBunk = bunksAllowed.coerceAtLeast(0), classesToAttend = 0)
         } else {
             // Formula: M >= (T*N - 100*A) / (100 - T)
-            val mustAttend = Math.ceil((target * total - 100.0 * attended) / (100.0 - target)).toInt()
+            val mustAttend = ceil((target * total - 100.0 * attended) / (100.0 - target)).toInt()
             BunkAnalysis(classesToBunk = 0, classesToAttend = mustAttend.coerceAtLeast(0))
         }
     }
@@ -164,6 +180,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setTheme(theme: String) {
         viewModelScope.launch {
             preferencesManager.saveTheme(theme)
+            firebaseAnalytics.logEvent("change_theme") {
+                param("theme_name", theme)
+            }
         }
     }
 
@@ -188,6 +207,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun triggerNavigation(subjectId: String) {
+        viewModelScope.launch {
+            _navigationEvents.send(subjectId)
+        }
+    }
+
     fun addOrUpdateSubject(
         subject: Subject,
         schedules: List<ClassSchedule>,
@@ -195,65 +220,159 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         pastAbsent: Int = 0
     ) {
         viewModelScope.launch {
-            val isNewSubject = subject.id.isEmpty() || subject.id == "0" // Safety check for old IDs
-            val finalSubject = if (isNewSubject) subject.copy(id = UUID.randomUUID().toString()) else subject
-            val subjectId = finalSubject.id
-            attendanceDao.insertSubject(finalSubject)
-            cloudSyncManager.syncSubject(finalSubject)
+            // ATOMIC FIX: Move the entire operation inside NonCancellable to ensure
+            // that if the user saves and immediately exits, the sync completes.
+            withContext(NonCancellable) {
+                cloudSyncManager.syncMutex.withLock {
+                    val isNewSubject = subject.id.isEmpty() || subject.id == "0"
+                    val finalSubject = if (isNewSubject) subject.copy(id = UUID.randomUUID().toString()) else subject
+                    val subjectId = finalSubject.id
+                    
+                    Log.d("AppViewModel", "Updating subject: ${finalSubject.name} ($subjectId)")
+                    attendanceDao.upsertSubject(finalSubject)
+                    cloudSyncManager.syncSubject(finalSubject)
 
-            if (!isNewSubject) {
-                val oldSchedules = attendanceDao.getSchedulesForSubject(subjectId)
-                val newScheduleIds = schedules.map { it.id }.filter { it.isNotBlank() }.toSet()
+                    // DEEP CLEAN FIX: Instead of relying on local cache, we query the cloud 
+                    // truth to identify and wipe any orphaned "ghost" schedules.
+                    if (!isNewSubject) {
+                        try {
+                            val cloudSchedules = cloudSyncManager.getSchedulesForSubject(subjectId)
+                            val newScheduleIds = schedules.map { it.id }.filter { it.isNotBlank() }.toSet()
+                            
+                            val toDeleteCloud = cloudSchedules.filter { it.id !in newScheduleIds }
+                            if (toDeleteCloud.isNotEmpty()) {
+                                Log.d("AppViewModel", "Wiping ${toDeleteCloud.size} ghost schedules from cloud.")
+                                cloudSyncManager.deleteSchedules(toDeleteCloud.map { it.id })
+                            }
+                            
+                            // Also wipe locally to be safe
+                            val localSchedules = attendanceDao.getSchedulesForSubject(subjectId)
+                            localSchedules.forEach { 
+                                if (it.id !in newScheduleIds) {
+                                    AlarmScheduler.cancelClassAlarm(getApplication(), it)
+                                    attendanceDao.deleteSchedule(it)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("AppViewModel", "Deep clean failed: ${e.message}")
+                        }
+                    }
 
-                // Only delete schedules that are no longer in the list
-                oldSchedules.forEach { oldSchedule ->
-                    if (oldSchedule.id !in newScheduleIds) {
-                        AlarmScheduler.cancelClassAlarm(getApplication(), oldSchedule)
-                        attendanceDao.deleteSchedule(oldSchedule)
-                        cloudSyncManager.deleteSchedule(oldSchedule.id)
+                    schedules.forEach { schedule ->
+                        val finalScheduleId = if (schedule.id.isBlank()) UUID.randomUUID().toString() else schedule.id
+                        val newSchedule = schedule.copy(id = finalScheduleId, subjectId = subjectId)
+
+                        attendanceDao.insertSchedule(newSchedule)
+                        cloudSyncManager.syncSchedule(newSchedule)
+                    }
+
+                    if (pastPresent > 0 || pastAbsent > 0) {
+                        performAddPastRecords(subjectId, pastPresent, pastAbsent)
+                    }
+
+                    val currentSchedules = attendanceDao.getSchedulesForSubject(subjectId)
+                    currentSchedules.forEach { schedule ->
+                        AlarmScheduler.scheduleClassAlarm(getApplication(), finalSubject, schedule)
                     }
                 }
             }
+        }
+    }
 
-            schedules.forEach { schedule ->
-                // Preserve ID if it exists, otherwise generate new one
-                val finalScheduleId = if (schedule.id.isBlank()) UUID.randomUUID().toString() else schedule.id
-                val newSchedule = schedule.copy(id = finalScheduleId, subjectId = subjectId)
-
-                attendanceDao.insertSchedule(newSchedule)
-                cloudSyncManager.syncSchedule(newSchedule)
+    fun addPastRecords(subjectId: String, presentCount: Int, absentCount: Int) {
+        viewModelScope.launch {
+            cloudSyncManager.syncMutex.withLock {
+                performAddPastRecords(subjectId, presentCount, absentCount)
             }
+        }
+    }
 
-            // Handle Past Attendance if provided
-            if (pastPresent > 0 || pastAbsent > 0) {
-                addPastRecords(subjectId, pastPresent, pastAbsent)
-            }
+    private suspend fun performAddPastRecords(subjectId: String, presentCount: Int, absentCount: Int) {
+        val note = "Past Record"
+        val today = LocalDate.now()
+        val newRecords = mutableListOf<AttendanceRecord>()
+        
+        val existingRecords = attendanceDao.getAttendanceRecordsForSubject(subjectId).first()
+        val existingDates = existingRecords.map { it.date }.toSet()
+        
+        // Fetch all holiday dates to skip them
+        val allHolidays = attendanceDao.getAllAttendanceRecords().first()
+            .filter { it.type == RecordType.HOLIDAY }
+            .map { it.date }
+            .toSet()
 
-            // Re-schedule all current alarms to pick up potential subject changes (name/color)
-            val currentSchedules = attendanceDao.getSchedulesForSubject(subjectId)
-            currentSchedules.forEach { schedule ->
-                AlarmScheduler.scheduleClassAlarm(
-                    getApplication(),
-                    finalSubject,
-                    schedule
+        var dayOffset = 1
+        var presentAdded = 0
+        while (presentAdded < presentCount && dayOffset < 365) {
+            val date = today.minusDays(dayOffset.toLong()).toEpochDay()
+            if (date !in existingDates && date !in allHolidays) {
+                val record = AttendanceRecord(
+                    id = UUID.randomUUID().toString(),
+                    subjectId = subjectId,
+                    scheduleId = ID_SCHEDULE_PAST,
+                    date = date,
+                    isPresent = true,
+                    note = note,
+                    type = RecordType.MANUAL
                 )
+                newRecords.add(record)
+                presentAdded++
             }
+            dayOffset++
+        }
+
+        var absentAdded = 0
+        while (absentAdded < absentCount && dayOffset < 365) {
+            val date = today.minusDays(dayOffset.toLong()).toEpochDay()
+            val dateAsLong = date
+            if (dateAsLong !in existingDates && dateAsLong !in allHolidays && newRecords.none { it.date == dateAsLong }) {
+                val record = AttendanceRecord(
+                    id = UUID.randomUUID().toString(),
+                    subjectId = subjectId,
+                    scheduleId = ID_SCHEDULE_PAST,
+                    date = dateAsLong,
+                    isPresent = false,
+                    note = note,
+                    type = RecordType.MANUAL
+                )
+                newRecords.add(record)
+                absentAdded++
+            }
+            dayOffset++
+        }
+        
+        if (newRecords.isNotEmpty()) {
+            attendanceDao.insertAttendanceRecords(newRecords)
+            cloudSyncManager.syncAttendanceRecords(newRecords)
+            _attendanceActionFeedback.emit(getApplication<Application>().getString(R.string.feedback_past_records_added))
+            checkAndTriggerLowAttendanceWarning(subjectId)
         }
     }
 
     fun deleteSubject(subject: Subject) {
         viewModelScope.launch {
+            firebaseAnalytics.logEvent("delete_subject") {
+                param("subject_name", subject.name)
+            }
             val schedules = attendanceDao.getSchedulesForSubject(subject.id)
             schedules.forEach { schedule ->
                 AlarmScheduler.cancelClassAlarm(getApplication(), schedule)
             }
             
-            // ATOMIC FIX: Rely on CloudSyncManager for bulk cloud deletion
-            attendanceDao.deleteAttendanceRecordsForSubject(subject.id)
-            attendanceDao.deleteSchedulesForSubject(subject.id)
-            attendanceDao.deleteSubject(subject)
-            
-            cloudSyncManager.deleteSubject(subject.id)
+            // ATOMIC FIX: Ensure deletion is robust and not cancelled
+            withContext(NonCancellable) {
+                cloudSyncManager.syncMutex.withLock {
+                    try {
+                        attendanceDao.deleteAttendanceRecordsForSubject(subject.id)
+                        attendanceDao.deleteSchedulesForSubject(subject.id)
+                        attendanceDao.deleteSubject(subject)
+                        
+                        cloudSyncManager.deleteSubject(subject.id)
+                    } catch (e: Exception) {
+                        Log.e("AppViewModel", "Error deleting subject: ${e.message}")
+                    }
+                }
+            }
         }
     }
 
@@ -277,48 +396,67 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                // 2. Identify existing records to clean up to prevent duplicates
-                val recordIdsToClean = mutableListOf<String>()
-                if (scheduleId.isNotEmpty() && scheduleId != ID_SCHEDULE_MANUAL && scheduleId != ID_SCHEDULE_PAST) {
-                    val existingRecords =
-                        attendanceDao.getAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
-                    recordIdsToClean.addAll(existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.map { it.id })
-                } else if (type == RecordType.MANUAL && scheduleId == ID_SCHEDULE_MANUAL) {
-                    val existingRecords =
-                        attendanceDao.getAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
-                    recordIdsToClean.addAll(existingRecords.map { it.id })
-                }
+                // 2. Wrap everything in a Sync Mutex to prevent real-time re-insertion
+                cloudSyncManager.syncMutex.withLock {
+                    // 2a. Identify existing records to clean up to prevent duplicates
+                    val recordIdsToClean = mutableListOf<String>()
+                    if (scheduleId.isNotEmpty() && scheduleId != ID_SCHEDULE_MANUAL && scheduleId != ID_SCHEDULE_PAST) {
+                        val existingRecords =
+                            attendanceDao.getAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
+                        // If marking a specific schedule, clean up that schedule and any general 'Manual' marks
+                        recordIdsToClean.addAll(existingRecords.filter { it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL }.map { it.id })
+                    } else if ((type == RecordType.MANUAL || type == RecordType.CANCELLED) && scheduleId == ID_SCHEDULE_MANUAL) {
+                        val existingRecords =
+                            attendanceDao.getAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
+                        // If marking the whole day (Manual/Cancelled), clean up EVERYTHING for this subject today
+                        recordIdsToClean.addAll(existingRecords.map { it.id })
+                    }
 
-                // 3. Create new record
-                val record = AttendanceRecord(
-                    id = UUID.randomUUID().toString(),
-                    subjectId = subjectId,
-                    scheduleId = scheduleId,
-                    date = dateAsLong,
-                    isPresent = isPresent,
-                    type = type,
-                    note = note
-                )
+                    // 3. Create new record
+                    val record = AttendanceRecord(
+                        id = UUID.randomUUID().toString(),
+                        subjectId = subjectId,
+                        scheduleId = scheduleId,
+                        date = dateAsLong,
+                        isPresent = isPresent,
+                        type = type,
+                        note = note
+                    )
 
-                // 4. Perform atomic local update (triggers UI refresh instantly via Room Flows)
-                attendanceDao.markAttendanceTransaction(recordIdsToClean, record)
+                    // 4. Perform atomic local update
+                    attendanceDao.markAttendanceTransaction(recordIdsToClean, record)
+                    
+                    firebaseAnalytics.logEvent("mark_attendance") {
+                        param("type", type.name)
+                        param("is_present", if (isPresent) 1L else 0L)
+                    }
 
-                // 5. Fire-and-forget cloud sync and notification cleanup in the background
-                launch {
-                    try {
-                        if (recordIdsToClean.isNotEmpty()) {
-                            cloudSyncManager.deleteAttendanceRecords(recordIdsToClean)
+                    // 5. Fire-and-forget cloud sync and notification cleanup in the background
+                    launch {
+                        withContext(NonCancellable) {
+                            try {
+                                if (recordIdsToClean.isNotEmpty()) {
+                                    cloudSyncManager.deleteAttendanceRecords(recordIdsToClean)
+                                }
+                                cloudSyncManager.syncAttendanceRecord(record)
+
+                                if (scheduleId.isNotEmpty() && scheduleId != ID_SCHEDULE_MANUAL) {
+                                    NotificationHelper.cancelNotification(getApplication(), scheduleId.hashCode())
+                                } else if (scheduleId == ID_SCHEDULE_MANUAL && date == LocalDate.now()) {
+                                    // If marking manual for today, cancel any active notifications for this subject's schedules today
+                                    val dayOfWeek = (date.dayOfWeek.value % 7) + 1
+                                    attendanceDao.getSchedulesForDayNow(dayOfWeek).forEach { s ->
+                                        if (s.subjectId == subjectId) {
+                                            NotificationHelper.cancelNotification(getApplication(), s.id.hashCode())
+                                        }
+                                    }
+                                }
+
+                                checkAndTriggerLowAttendanceWarning(subjectId)
+                            } catch (e: Exception) {
+                                Log.e("AppViewModel", "Background sync error: ${e.message}")
+                            }
                         }
-                        cloudSyncManager.syncAttendanceRecord(record)
-
-                        // SYNC FIX: Cancel notification if it was shown for this slot
-                        if (scheduleId.isNotEmpty() && scheduleId != ID_SCHEDULE_MANUAL) {
-                            NotificationHelper.cancelNotification(getApplication(), scheduleId.hashCode())
-                        }
-
-                        checkAndTriggerLowAttendanceWarning(subjectId)
-                    } catch (e: Exception) {
-                        Log.e("AppViewModel", "Background sync error: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
@@ -330,6 +468,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun updateAttendanceRecord(subjectId: String, date: LocalDate, isPresent: Boolean) {
         val note = if (isPresent) "Marked Present" else "Marked Absent"
         markAttendance(subjectId, ID_SCHEDULE_MANUAL, date, RecordType.MANUAL, isPresent, note)
+        viewModelScope.launch {
+            _attendanceActionFeedback.emit(getApplication<Application>().getString(R.string.feedback_attendance_updated))
+        }
     }
 
     fun deleteAttendanceRecordById(recordId: String, subjectId: String) {
@@ -366,43 +507,64 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markDateAsCancelled(subjectId: String, date: LocalDate) {
         markAttendance(subjectId, ID_SCHEDULE_MANUAL, date, RecordType.CANCELLED, false, "Class Cancelled")
+        viewModelScope.launch {
+            _attendanceActionFeedback.emit(getApplication<Application>().getString(R.string.feedback_attendance_updated))
+        }
     }
 
     fun addExtraClasses(subjectId: String, date: LocalDate, isPresent: Boolean, count: Int) {
         viewModelScope.launch {
-            val note = "Extra Class"
-            val newRecords = mutableListOf<AttendanceRecord>()
-            repeat(count) {
-                val record = AttendanceRecord(
-                    id = UUID.randomUUID().toString(),
-                    subjectId = subjectId,
-                    scheduleId = ID_SCHEDULE_EXTRA,
-                    date = date.toEpochDay(),
-                    isPresent = isPresent,
-                    type = RecordType.MANUAL,
-                    note = note
-                )
-                newRecords.add(record)
+            val dateAsLong = date.toEpochDay()
+            
+            // Check for Holiday
+            val dayRecords = attendanceDao.getAllAttendanceRecordsOnDateNow(dateAsLong)
+            if (dayRecords.any { it.type == RecordType.HOLIDAY }) {
+                _attendanceActionFeedback.emit(getApplication<Application>().getString(R.string.error_holiday_manual_mark))
+                return@launch
             }
-            attendanceDao.insertAttendanceRecords(newRecords)
-            cloudSyncManager.syncAttendanceRecords(newRecords)
-            checkAndTriggerLowAttendanceWarning(subjectId)
+
+            withContext(NonCancellable) {
+                cloudSyncManager.syncMutex.withLock {
+                    val note = "Extra Class"
+                    val newRecords = mutableListOf<AttendanceRecord>()
+                    repeat(count) {
+                        val record = AttendanceRecord(
+                            id = UUID.randomUUID().toString(),
+                            subjectId = subjectId,
+                            scheduleId = ID_SCHEDULE_EXTRA,
+                            date = dateAsLong,
+                            isPresent = isPresent,
+                            type = RecordType.MANUAL,
+                            note = note
+                        )
+                        newRecords.add(record)
+                    }
+                    attendanceDao.insertAttendanceRecords(newRecords)
+                    cloudSyncManager.syncAttendanceRecords(newRecords)
+                    _attendanceActionFeedback.emit(getApplication<Application>().getString(R.string.feedback_extra_class_added))
+                    checkAndTriggerLowAttendanceWarning(subjectId)
+                }
+            }
         }
     }
 
     fun deleteAllData() {
         viewModelScope.launch {
-            val subjects = allSubjects.first()
-            subjects.forEach { subject ->
-                val schedules = attendanceDao.getSchedulesForSubject(subject.id)
-                schedules.forEach { schedule ->
-                    AlarmScheduler.cancelClassAlarm(getApplication(), schedule)
+            withContext(NonCancellable) {
+                cloudSyncManager.syncMutex.withLock {
+                    val subjects = allSubjects.first()
+                    subjects.forEach { subject ->
+                        val schedules = attendanceDao.getSchedulesForSubject(subject.id)
+                        schedules.forEach { schedule ->
+                            AlarmScheduler.cancelClassAlarm(getApplication(), schedule)
+                        }
+                    }
+                    attendanceDao.deleteAllAttendanceRecords()
+                    attendanceDao.deleteAllSchedules()
+                    attendanceDao.deleteAllSubjects()
+                    cloudSyncManager.deleteAllCloudData()
                 }
             }
-            attendanceDao.deleteAllAttendanceRecords()
-            attendanceDao.deleteAllSchedules()
-            attendanceDao.deleteAllSubjects()
-            cloudSyncManager.deleteAllCloudData()
         }
     }
 
@@ -463,125 +625,68 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onHolidayToggleConfirmed() {
-        Log.d("AppViewModel", "onHolidayToggleConfirmed called. Current Dialog State: ${_showHolidayDialog.value}")
+        Log.d("AppViewModel", "onHolidayToggleConfirmed called.")
         viewModelScope.launch {
             _showHolidayDialog.value?.let { date ->
-                val dateAsLong = date.toEpochDay()
-                
-                // 1. Get IDs for cloud cleanup before deleting locally
-                val allDayRecords = attendanceDao.getAllAttendanceRecordsOnDateNow(dateAsLong)
-                val recordIdsToDelete = allDayRecords.map { it.id }
-                
-                // 2. Insert holiday record atomically
-                val holidayRecord = AttendanceRecord(
-                    id = UUID.randomUUID().toString(),
-                    subjectId = ID_SUBJECT_HOLIDAY,
-                    scheduleId = ID_SCHEDULE_HOLIDAY,
-                    date = dateAsLong,
-                    isPresent = false,
-                    note = "Holiday",
-                    type = RecordType.HOLIDAY
-                )
-                
-                attendanceDao.markHolidayTransaction(dateAsLong, holidayRecord)
-                
-                // 3. Sync deletions and insertion to cloud
-                cloudSyncManager.deleteAttendanceRecords(recordIdsToDelete)
-                cloudSyncManager.syncAttendanceRecord(holidayRecord)
+                withContext(NonCancellable) {
+                    cloudSyncManager.syncMutex.withLock {
+                        val dateAsLong = date.toEpochDay()
+                        
+                        // 1. Get IDs for cloud cleanup before deleting locally
+                        val allDayRecords = attendanceDao.getAllAttendanceRecordsOnDateNow(dateAsLong)
+                        val recordIdsToDelete = allDayRecords.map { it.id }
+                        
+                        // 2. Insert holiday record atomically
+                        val holidayRecord = AttendanceRecord(
+                            id = UUID.randomUUID().toString(),
+                            subjectId = ID_SUBJECT_HOLIDAY,
+                            scheduleId = ID_SCHEDULE_HOLIDAY,
+                            date = dateAsLong,
+                            isPresent = false,
+                            note = "Holiday",
+                            type = RecordType.HOLIDAY
+                        )
+                        
+                        attendanceDao.markHolidayTransaction(dateAsLong, holidayRecord)
+                        
+                        // 3. Sync deletions and insertion to cloud
+                        cloudSyncManager.deleteAttendanceRecords(recordIdsToDelete)
+                        cloudSyncManager.syncAttendanceRecord(holidayRecord)
 
-                // 3. Cancel alarms and active notifications for this day
-                // FIX: LocalDate.dayOfWeek.value is 1 (Mon) - 7 (Sun), while Calendar uses 2 (Mon) - 1 (Sun)
-                val calendarDayOfWeek = (date.dayOfWeek.value % 7) + 1
-                val schedulesForDay = attendanceDao.getSchedulesForDayNow(calendarDayOfWeek)
-                schedulesForDay.forEach { schedule ->
-                    AlarmScheduler.cancelClassAlarm(getApplication(), schedule)
-                    NotificationHelper.cancelNotification(getApplication(), schedule.id.hashCode())
+                        // 4. Cancel TODAY'S alarms but immediately reschedule for NEXT WEEK
+                        // This ensures the chain of weekly reminders isn't broken by a single holiday.
+                        val calendarDayOfWeek = (date.dayOfWeek.value % 7) + 1
+                        val schedulesForDay = attendanceDao.getSchedulesForDayNow(calendarDayOfWeek)
+                        val allSubjectsList = attendanceDao.getAllSubjects().first()
+                        
+                        schedulesForDay.forEach { schedule ->
+                            // Cancel today
+                            AlarmScheduler.cancelClassAlarm(getApplication(), schedule)
+                            NotificationHelper.cancelNotification(getApplication(), schedule.id.hashCode())
+                            
+                            // Reschedule for next week (leap-frog)
+                            val subject = allSubjectsList.find { it.id == schedule.subjectId }
+                            if (subject != null) {
+                                AlarmScheduler.scheduleClassAlarm(getApplication(), subject, schedule, forceNextWeek = true)
+                            }
+                        }
+                    }
                 }
             }
             _showHolidayDialog.value = null
         }
     }
 
-    fun onHolidayToggleDismissed() {
-        _showHolidayDialog.value = null
-    }
-
-    fun addPastRecords(subjectId: String, presentCount: Int, absentCount: Int) {
-        viewModelScope.launch {
-            val note = "Past Record"
-            val today = LocalDate.now()
-            val newRecords = mutableListOf<AttendanceRecord>()
-
-            repeat(presentCount) { i ->
-                val date = today.minusDays(i.toLong() + 1).toEpochDay()
-                val record = AttendanceRecord(
-                    id = UUID.randomUUID().toString(),
-                    subjectId = subjectId,
-                    scheduleId = ID_SCHEDULE_PAST,
-                    date = date,
-                    isPresent = true,
-                    note = note,
-                    type = RecordType.MANUAL
-                )
-                newRecords.add(record)
-            }
-
-            repeat(absentCount) { i ->
-                val date = today.minusDays((presentCount + i).toLong() + 1).toEpochDay()
-                val record = AttendanceRecord(
-                    id = UUID.randomUUID().toString(),
-                    subjectId = subjectId,
-                    scheduleId = ID_SCHEDULE_PAST,
-                    date = date,
-                    isPresent = false,
-                    note = note,
-                    type = RecordType.MANUAL
-                )
-                newRecords.add(record)
-            }
-            
-            attendanceDao.insertAttendanceRecords(newRecords)
-            cloudSyncManager.syncAttendanceRecords(newRecords)
-            checkAndTriggerLowAttendanceWarning(subjectId)
-        }
-    }
-
-    suspend fun getOverallStatistics(): AttendanceStatistics {
-        val total = attendanceDao.getTotalClassesOverall()
-        val present = attendanceDao.getTotalPresentOverall()
-        val subjects = attendanceDao.getSubjectCount()
-        return AttendanceStatistics(
-            total,
-            present,
-            total - present,
-            if (total > 0) (present.toDouble() / total) * 100 else 0.0,
-            subjects
-        )
-    }
-
-    suspend fun calculateBunkAnalysis(subjectId: String): BunkAnalysis {
-        val subject = getSubjectById(subjectId) ?: return BunkAnalysis(0, 0)
-        val attended = attendanceDao.getPresentClassesForSubject(subjectId)
-        val total = attendanceDao.getTotalClassesForSubject(subjectId)
-        val target = subject.targetAttendance.toDouble()
-
-        if (total == 0) return BunkAnalysis(0, 0)
-        if (target <= 0) return BunkAnalysis(classesToBunk = 999, classesToAttend = 0)
-
-        val currentPercentage = (attended.toDouble() / total) * 100.0
-
-        return if (currentPercentage >= target) {
-            val bunksAllowed = ((100.0 * attended) / target).toInt() - total
-            BunkAnalysis(classesToBunk = bunksAllowed.coerceAtLeast(0), classesToAttend = 0)
-        } else {
-            if (target >= 100.0) return BunkAnalysis(0, Int.MAX_VALUE)
-            val mustAttend = Math.ceil((target * total - 100.0 * attended) / (100.0 - target)).toInt()
-            BunkAnalysis(classesToBunk = 0, classesToAttend = mustAttend.coerceAtLeast(0))
-        }
-    }
-
 
     private fun getTodaysSchedule(): Flow<List<ScheduleWithSubject>> {
+        // TIMER: A flow that emits every 30 seconds to force re-evaluation of "Live" class status and sorting
+        val refreshTimer = flow {
+            while (true) {
+                emit(System.currentTimeMillis())
+                delay(30_000)
+            }
+        }
+
         return currentDate.flatMapLatest { todayDate ->
             val todayDayOfWeek = (todayDate.dayOfWeek.value % 7) + 1 // Convert to Calendar day constant
             val todayEpochDay = todayDate.toEpochDay()
@@ -590,12 +695,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 attendanceDao.getSchedulesForDay(todayDayOfWeek),
                 allSubjects,
                 attendanceDao.isDateHolidayFlow(todayEpochDay),
-                allAttendanceRecords
-            ) { schedules, subjects, isTodayHoliday, records ->
+                allAttendanceRecords,
+                refreshTimer
+            ) { schedules, subjects, isTodayHoliday, records, _ ->
                 if (isTodayHoliday) {
                     emptyList()
                 } else {
-                    schedules.mapNotNull { schedule ->
+                    val now = java.time.LocalTime.now()
+                    
+                    val regularClasses = schedules.mapNotNull { schedule ->
                         val subject = subjects.find { it.id == schedule.subjectId } ?: return@mapNotNull null
                         val record = records.find {
                             val sId = schedule.id
@@ -603,10 +711,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                     it.date == todayEpochDay &&
                                     it.subjectId == subject.id
                         }
-                        ScheduleWithSubject(schedule, subject, record)
-                    }.sortedWith(
-                        compareByDescending<ScheduleWithSubject> { it.isCurrentClass }
-                            .thenBy { it.schedule.startHour ?: 0 }
+                        
+                        val start = java.time.LocalTime.of(schedule.startHour, schedule.startMinute)
+                        val end = java.time.LocalTime.of(schedule.endHour, schedule.endMinute)
+                        val isLive = (now == start || now.isAfter(start)) && now.isBefore(end)
+                        val isCompleted = now.isAfter(end)
+                        
+                        ScheduleWithSubject(schedule, subject, record, isLive, isCompleted)
+                    }
+
+                    val extraClasses = records.filter { 
+                        it.date == todayEpochDay && it.scheduleId == ID_SCHEDULE_EXTRA 
+                    }.mapNotNull { record ->
+                        val subject = subjects.find { it.id == record.subjectId } ?: return@mapNotNull null
+                        // Synthetic schedule for UI representation
+                        val syntheticSchedule = ClassSchedule(
+                            id = record.id,
+                            subjectId = subject.id,
+                            dayOfWeek = todayDayOfWeek,
+                            startHour = 23, // Sort to bottom
+                            startMinute = 59
+                        )
+                        ScheduleWithSubject(syntheticSchedule, subject, record, isLive = false, isCompleted = true)
+                    }
+
+                    (regularClasses + extraClasses).sortedWith(
+                        compareByDescending<ScheduleWithSubject> { it.isLive }
+                            .thenBy { it.schedule.startHour }
+                            .thenBy { it.schedule.startMinute }
                     )
                 }
             }
@@ -619,7 +751,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 .mapValues { entry ->
                     entry.value.mapNotNull { schedule ->
                         allSubjects.find { it.id == schedule.subjectId }?.let { subject ->
-                            ScheduleWithSubject(schedule, subject)
+                            ScheduleWithSubject(schedule, subject, isLive = false, isCompleted = false)
                         }
                     }.sortedBy { it.schedule.startHour ?: 0 }
             }
@@ -663,12 +795,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 com.google.firebase.auth.FirebaseAuth.getInstance()
                     .createUserWithEmailAndPassword(email, password)
                     .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            // SYNC FIX: Upload current local state to the new account
+                            viewModelScope.launch {
+                                uploadAllLocalDataToCloud()
+                                cloudSyncManager.startRealTimeSync(attendanceDao, viewModelScope)
+                            }
+                        }
                         onComplete(task.isSuccessful, task.exception?.message)
                     }
             } catch (e: Exception) {
                 onComplete(false, e.message)
             }
         }
+    }
+
+    private suspend fun uploadAllLocalDataToCloud() {
+        val subjects = allSubjects.first()
+        val schedules = attendanceDao.getAllSchedules().first()
+        val records = allAttendanceRecords.first()
+
+        // 1. Sync Profile Name
+        cloudSyncManager.syncUserProfile(userName.value)
+        
+        // 2. Sync Subjects (Sequential to ensure parent exists)
+        subjects.forEach { cloudSyncManager.syncSubject(it) }
+        
+        // 3. Sync Schedules and Records in batches
+        cloudSyncManager.syncSchedules(schedules)
+        cloudSyncManager.syncAttendanceRecords(records)
+        
+        Log.d("AppViewModel", "Offline data migration complete: ${subjects.size} subjects synced.")
     }
 
     fun loginWithEmail(email: String, password: String, onComplete: (Boolean, String?) -> Unit) {
@@ -679,12 +836,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 auth.signInWithEmailAndPassword(email, password).await()
                 
                 // 1. Restore the original name from cloud
+                Log.d("AppViewModel", "Fetching stored name from cloud...")
                 val storedName = cloudSyncManager.getUserProfileName()
+                Log.d("AppViewModel", "Cloud name result: '$storedName'")
+                
                 if (!storedName.isNullOrBlank()) {
                     preferencesManager.saveUserName(storedName)
+                    Log.d("AppViewModel", "Restored name from cloud: $storedName")
+                } else {
+                    Log.w("AppViewModel", "No name found in cloud for this user.")
                 }
                 
-                // 2. Restore all attendance data silently (this clears local data internally)
+                // 2. Restore all attendance data silently
+                Log.d("AppViewModel", "Starting full data restore...")
+                // Cancel existing alarms before restore to avoid duplicates/orphans
+                val existingSubjects = attendanceDao.getAllSubjects().first()
+                existingSubjects.forEach { s ->
+                    attendanceDao.getSchedulesForSubject(s.id).forEach { 
+                        AlarmScheduler.cancelClassAlarm(getApplication(), it)
+                    }
+                }
+                
                 val success = cloudSyncManager.restoreAllData(attendanceDao)
                 if (success) {
                     cloudSyncManager.startRealTimeSync(attendanceDao, viewModelScope)
@@ -706,20 +878,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun logout(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             cloudSyncManager.stopRealTimeSync()
-            // 1. Clear local data
+            // 1. Cancel all active alarms before clearing data
+            val subjects = attendanceDao.getAllSubjects().first()
+            subjects.forEach { subject ->
+                val schedules = attendanceDao.getSchedulesForSubject(subject.id)
+                schedules.forEach { schedule ->
+                    AlarmScheduler.cancelClassAlarm(getApplication(), schedule)
+                }
+            }
+            
+            // 2. Clear local data
             attendanceDao.deleteAllSubjects()
             attendanceDao.deleteAllSchedules()
             attendanceDao.deleteAllAttendanceRecords()
             
-            // 2. Clear preferences
-            preferencesManager.saveUserName("")
+            // 3. Clear preferences (Keep username for a moment to prevent 'Student' flicker during transition)
             preferencesManager.setOnboardingComplete(false)
 
-            // 3. Clear internal ViewModel state
+            // 4. Clear internal ViewModel state
             _showHolidayDialog.value = null
             
-            // 4. Sign out from Firebase
+            // 5. Sign out from Firebase
             com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+            
+            // Final step: Clear the name after sign out is initiated
+            preferencesManager.saveUserName("")
             onComplete()
         }
     }

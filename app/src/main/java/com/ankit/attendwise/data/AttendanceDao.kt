@@ -14,25 +14,36 @@ import kotlinx.coroutines.flow.Flow
 interface AttendanceDao {
 
     // --- Subject Queries ---
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSubject(subject: Subject): Long
+
+    @Update
+    suspend fun updateSubject(subject: Subject)
+
+    @Transaction
+    suspend fun upsertSubject(subject: Subject) {
+        val id = insertSubject(subject)
+        if (id == -1L) {
+            updateSubject(subject)
+        }
+    }
 
     @Delete
     suspend fun deleteSubject(subject: Subject)
 
-    @Query("SELECT * FROM subjects ORDER BY name ASC")
+    @Query("SELECT * FROM subjects WHERE id != '0' ORDER BY name ASC")
     fun getAllSubjects(): Flow<List<Subject>>
 
     @Query("SELECT * FROM subjects WHERE id = :subjectId")
     suspend fun getSubjectById(subjectId: String): Subject?
 
-    @Query("SELECT COUNT(*) FROM subjects")
+    @Query("SELECT COUNT(*) FROM subjects WHERE id != '0'")
     suspend fun getSubjectCount(): Int
 
-    @Query("DELETE FROM subjects WHERE id = :subjectId")
+    @Query("DELETE FROM subjects WHERE id = :subjectId AND id != '0'")
     suspend fun deleteSubjectById(subjectId: String)
 
-    @Query("DELETE FROM subjects")
+    @Query("DELETE FROM subjects WHERE id != '0'")
     suspend fun deleteAllSubjects()
 
 
@@ -67,8 +78,10 @@ interface AttendanceDao {
     @Query("DELETE FROM class_schedules")
     suspend fun deleteAllSchedules()
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSubjects(subjects: List<Subject>)
+    @Transaction
+    suspend fun upsertSubjects(subjects: List<Subject>) {
+        subjects.forEach { upsertSubject(it) }
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSchedules(schedules: List<ClassSchedule>)
@@ -80,12 +93,16 @@ interface AttendanceDao {
     suspend fun restoreDataBatch(
         subjects: List<Subject>,
         schedules: List<ClassSchedule>,
-        records: List<AttendanceRecord>
+        records: List<AttendanceRecord>,
     ) {
         deleteAllSubjects()
         deleteAllSchedules()
         deleteAllAttendanceRecords()
-        insertSubjects(subjects)
+        
+        // Ensure system subject exists before restoring records that might depend on it
+        upsertSubject(Subject(id = "0", name = "System", color = "#FFC107", targetAttendance = 0))
+        
+        upsertSubjects(subjects)
         insertSchedules(schedules)
         insertAttendanceRecords(records)
     }
@@ -179,7 +196,7 @@ interface AttendanceDao {
             COALESCE(SUM(CASE WHEN isPresent = 1 THEN 1 ELSE 0 END), 0) as totalPresent,
             (COUNT(*) - COALESCE(SUM(CASE WHEN isPresent = 1 THEN 1 ELSE 0 END), 0)) as totalAbsent,
             CASE WHEN COUNT(*) > 0 THEN (CAST(COALESCE(SUM(CASE WHEN isPresent = 1 THEN 1 ELSE 0 END), 0) AS REAL) / COUNT(*)) * 100.0 ELSE 0.0 END as overallPercentage,
-            (SELECT COUNT(*) FROM subjects) as subjectCount
+            (SELECT COUNT(*) FROM subjects WHERE id != '0') as subjectCount
         FROM attendance_records 
         WHERE type = 'CLASS' OR type = 'MANUAL'
     """)
@@ -191,6 +208,7 @@ interface AttendanceDao {
                (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND (type = 'CLASS' OR type = 'MANUAL')) as totalClasses,
                (SELECT COUNT(*) FROM attendance_records WHERE subjectId = s.id AND isPresent = 1 AND (type = 'CLASS' OR type = 'MANUAL')) as presentClasses
         FROM subjects s
+        WHERE s.id != '0'
     """)
     fun getSubjectsWithAttendance(): Flow<List<SubjectWithAttendance>>
 

@@ -22,47 +22,46 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val subjectId = intent.getStringExtra("subject_id") ?: ""
         val scheduleId = intent.getStringExtra("schedule_id") ?: ""
-        val subjectName = intent.getStringExtra("subject_name") ?: "Unknown"
 
-        Log.d(TAG, "Received alarm for: $subjectName (Subject ID: $subjectId, Schedule ID: $scheduleId)")
+        Log.d(TAG, "Received alarm for Subject ID: $subjectId, Schedule ID: $scheduleId")
 
         if (subjectId.isNotEmpty() && scheduleId.isNotEmpty()) {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val dao = AppDatabase.getDatabase(context).attendanceDao()
+                    
+                    // Look up subject and schedule once at the start
+                    val subject = dao.getSubjectById(subjectId)
+                    val schedule = dao.getScheduleById(scheduleId)
+                    
+                    if (subject == null || schedule == null) {
+                        Log.e(TAG, "Subject or Schedule not found in DB. Stopping alarm chain.")
+                        return@launch
+                    }
+
                     val today = LocalDate.now().toEpochDay()
                     val todayRecords = dao.getAllAttendanceRecordsOnDateNow(today)
                     val isHoliday = todayRecords.any { it.type == RecordType.HOLIDAY }
 
+                    // ALWAYS Reschedule for next week first to maintain the chain
+                    // Use forceNextWeek = true because this alarm was just triggered for 'today'
+                    AlarmScheduler.scheduleClassAlarm(context, subject, schedule, forceNextWeek = true)
+
                     if (isHoliday) {
-                        Log.d(TAG, "Today is a Holiday. Rescheduling for next week without showing notification.")
-                        val subject = dao.getSubjectById(subjectId)
-                        val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
-                        if (subject != null && schedule != null) {
-                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
-                        }
+                        Log.d(TAG, "Today is a Holiday. Notification skipped, but alarm rescheduled.")
                     } else {
-                        val subject = dao.getSubjectById(subjectId)
-                        val schedule = dao.getSchedulesForSubject(subjectId).find { it.id == scheduleId }
-                        
-                        if (subject != null && schedule != null) {
-                            // Reschedule for next week
-                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                        // Check if already marked for today
+                        val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, today)
+                        val isAlreadyMarked = existingRecords.any { 
+                            it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL
+                        }
 
-                            // Check if already marked for today
-                            val dateAsLong = LocalDate.now().toEpochDay()
-                            val existingRecords = dao.getAttendanceRecordsForSubjectOnDate(subjectId, dateAsLong)
-                            val isAlreadyMarked = existingRecords.any { 
-                                it.scheduleId == scheduleId || it.scheduleId == ID_SCHEDULE_MANUAL
-                            }
-
-                            if (!isAlreadyMarked) {
-                                Log.d(TAG, "Showing notification for ${subject.name ?: "Class"}")
-                                NotificationHelper.showAttendanceNotification(context, subject, schedule)
-                            } else {
-                                Log.d(TAG, "Skipping notification (already marked)")
-                            }
+                        if (!isAlreadyMarked) {
+                            Log.d(TAG, "Showing notification for ${subject.name ?: "Class"}")
+                            NotificationHelper.showAttendanceNotification(context, subject, schedule)
+                        } else {
+                            Log.d(TAG, "Skipping notification (already marked)")
                         }
                     }
                 } catch (e: Exception) {

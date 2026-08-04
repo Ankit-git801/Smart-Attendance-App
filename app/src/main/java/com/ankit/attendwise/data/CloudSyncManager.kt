@@ -7,14 +7,16 @@ package com.ankit.attendwise.data
 import android.content.Context
 import android.util.Log
 import androidx.annotation.Keep
+import com.ankit.attendwise.utils.AlarmScheduler
 import com.ankit.attendwise.utils.Constants
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 
 class CloudSyncManager(private val context: Context) {
@@ -23,6 +25,9 @@ class CloudSyncManager(private val context: Context) {
     private val preferencesManager = PreferencesManager(context)
     private val TAG = "CloudSyncManager"
     private var listeners = mutableListOf<ListenerRegistration>()
+    
+    // Shared safety lock to prevent race conditions during local writes
+    val syncMutex = Mutex()
 
     private fun getUserId(): String? = auth.currentUser?.uid
 
@@ -44,8 +49,10 @@ class CloudSyncManager(private val context: Context) {
                 val cloudName = doc.getString("name")
                 if (!cloudName.isNullOrBlank()) {
                     scope.launch {
-                        preferencesManager.saveUserName(cloudName)
-                        Log.d(TAG, "Username updated from cloud: $cloudName")
+                        syncMutex.withLock {
+                            preferencesManager.saveUserName(cloudName)
+                            Log.d(TAG, "Username updated from cloud: $cloudName")
+                        }
                     }
                 }
             }
@@ -62,9 +69,25 @@ class CloudSyncManager(private val context: Context) {
                     when (dc.type) {
                         DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> {
                             try {
-                                val subject = dc.document.toObject(Subject::class.java)
-                                if (subject != null) {
-                                    scope.launch { dao.insertSubject(subject) }
+                                val subject = dc.document.toObject(Subject::class.java).copy(id = dc.document.id)
+                                val isAdded = dc.type == DocumentChange.Type.ADDED
+                                
+                                scope.launch { 
+                                    // FETCH FIRST: Get cloud data outside the mutex to prevent locking the UI
+                                    val schedules = if (isAdded) getSchedulesForSubject(subject.id) else emptyList()
+                                    
+                                    syncMutex.withLock {
+                                        dao.upsertSubject(subject) 
+                                        
+                                        // RACE CONDITION FIX: If a new subject arrives, proactively fetch its schedules
+                                        // from the cloud to ensure they aren't missed due to Foreign Key timing issues.
+                                        if (isAdded && schedules.isNotEmpty()) {
+                                            schedules.forEach { schedule ->
+                                                dao.insertSchedule(schedule)
+                                                AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                                            }
+                                        }
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error deserializing subject: ${e.message}")
@@ -72,7 +95,14 @@ class CloudSyncManager(private val context: Context) {
                         }
                         DocumentChange.Type.REMOVED -> {
                             val id = dc.document.id
-                            scope.launch { dao.deleteSubjectById(id) }
+                            scope.launch { 
+                                syncMutex.withLock {
+                                    // CANCEL ALARMS BEFORE DELETE
+                                    val schedules = dao.getSchedulesForSubject(id)
+                                    schedules.forEach { AlarmScheduler.cancelClassAlarm(context, it) }
+                                    dao.deleteSubjectById(id) 
+                                }
+                            }
                         }
                     }
                 }
@@ -90,9 +120,17 @@ class CloudSyncManager(private val context: Context) {
                     when (dc.type) {
                         DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> {
                             try {
-                                val schedule = dc.document.toObject(ClassSchedule::class.java)
-                                if (schedule != null) {
-                                    scope.launch { dao.insertSchedule(schedule) }
+                                val schedule = dc.document.toObject(ClassSchedule::class.java).copy(id = dc.document.id)
+                                scope.launch { 
+                                    syncMutex.withLock {
+                                        // Ensure we don't insert a schedule if its subject was just deleted locally
+                                        val subject = dao.getSubjectById(schedule.subjectId)
+                                        if (subject != null) {
+                                            dao.insertSchedule(schedule) 
+                                            // Reschedule/Update alarm
+                                            AlarmScheduler.scheduleClassAlarm(context, subject, schedule)
+                                        }
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error deserializing schedule: ${e.message}")
@@ -100,7 +138,15 @@ class CloudSyncManager(private val context: Context) {
                         }
                         DocumentChange.Type.REMOVED -> {
                             val id = dc.document.id
-                            scope.launch { dao.deleteScheduleById(id) }
+                            scope.launch { 
+                                syncMutex.withLock {
+                                    val schedule = dao.getScheduleById(id)
+                                    if (schedule != null) {
+                                        AlarmScheduler.cancelClassAlarm(context, schedule)
+                                        dao.deleteScheduleById(id) 
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -118,9 +164,11 @@ class CloudSyncManager(private val context: Context) {
                     when (dc.type) {
                         DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED -> {
                             try {
-                                val record = dc.document.toObject(AttendanceRecord::class.java)
-                                if (record != null) {
-                                    scope.launch { dao.insertAttendanceRecord(record) }
+                                val record = dc.document.toObject(AttendanceRecord::class.java).copy(id = dc.document.id)
+                                scope.launch { 
+                                    syncMutex.withLock {
+                                        dao.insertAttendanceRecord(record) 
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "Error deserializing record: ${e.message}")
@@ -128,7 +176,11 @@ class CloudSyncManager(private val context: Context) {
                         }
                         DocumentChange.Type.REMOVED -> {
                             val id = dc.document.id
-                            scope.launch { dao.deleteAttendanceRecordById(id) }
+                            scope.launch { 
+                                syncMutex.withLock {
+                                    dao.deleteAttendanceRecordById(id) 
+                                }
+                            }
                         }
                     }
                 }
@@ -179,6 +231,22 @@ class CloudSyncManager(private val context: Context) {
             doc.getString("name")
         } catch (e: Exception) {
             null
+        }
+    }
+
+    suspend fun getSchedulesForSubject(subjectId: String): List<ClassSchedule> {
+        val userId = getUserId() ?: return emptyList()
+        return try {
+            val snapshot = db.collection("users").document(userId)
+                .collection("schedules")
+                .whereEqualTo("subjectId", subjectId)
+                .get().await()
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(ClassSchedule::class.java)?.copy(id = doc.id)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching schedules for subject: ${e.message}")
+            emptyList()
         }
     }
 
@@ -340,35 +408,38 @@ class CloudSyncManager(private val context: Context) {
             Log.d(TAG, "Starting data restore for user: $userId")
             val userDoc = db.collection("users").document(userId)
             
-            // 1. Restore Subjects
-            val subjects = userDoc.collection("subjects").get().await().toObjects(Subject::class.java)
+            // 1. Restore Subjects with correct IDs
+            val subjectsSnapshot = userDoc.collection("subjects").get().await()
+            val subjects = subjectsSnapshot.documents.mapNotNull { doc ->
+                doc.toObject(Subject::class.java)?.copy(id = doc.id)
+            }.filter { it.id != Constants.ID_SUBJECT_HOLIDAY } // DAO handles the system subject
             Log.d(TAG, "Fetched ${subjects.size} subjects from cloud")
 
-            // 2. Restore Schedules
-            val rawSchedules = userDoc.collection("schedules").get().await().toObjects(ClassSchedule::class.java)
+            // 2. Restore Schedules with correct IDs
+            val schedulesSnapshot = userDoc.collection("schedules").get().await()
+            val rawSchedules = schedulesSnapshot.documents.mapNotNull { doc ->
+                doc.toObject(ClassSchedule::class.java)?.copy(id = doc.id)
+            }
             
             // SANITIZATION: Only keep schedules that point to a subject we actually fetched
             val subjectIds = subjects.map { it.id }.toSet()
             val schedules = rawSchedules.filter { it.subjectId in subjectIds }
-            if (rawSchedules.size != schedules.size) {
-                Log.w(TAG, "Filtered out ${rawSchedules.size - schedules.size} orphaned schedules")
-            }
 
-            // 3. Restore Attendance Records
-            val rawRecords = userDoc.collection("attendance_records").get().await().toObjects(AttendanceRecord::class.java)
+            // 3. Restore Attendance Records with correct IDs
+            val recordsSnapshot = userDoc.collection("attendance_records").get().await()
+            val rawRecords = recordsSnapshot.documents.mapNotNull { doc ->
+                doc.toObject(AttendanceRecord::class.java)?.copy(id = doc.id)
+            }
             
             // SANITIZATION: Only keep records that point to a valid subject or are HOLIDAYs
             val records = rawRecords.filter { 
                 it.subjectId == Constants.ID_SUBJECT_HOLIDAY || it.subjectId in subjectIds 
             }
-            if (rawRecords.size != records.size) {
-                Log.w(TAG, "Filtered out ${rawRecords.size - records.size} orphaned attendance records")
-            }
             
-            // Batch insert into local DB for performance and atomicity
+            // Batch insert into local DB
             dao.restoreDataBatch(subjects, schedules, records)
 
-            Log.d(TAG, "All data successfully restored and sanitized from cloud")
+            Log.d(TAG, "All data successfully restored and mapped from cloud")
             true
         } catch (e: Exception) {
             Log.e(TAG, "Critical error during data restoration: ${e.message}", e)
@@ -397,9 +468,6 @@ class CloudSyncManager(private val context: Context) {
                     batch.commit().await()
                 }
             }
-
-            // Delete the user profile document itself
-            db.collection("users").document(userId).delete().await()
 
             Log.d(TAG, "All cloud data deleted for user: $userId using batches")
         } catch (e: Exception) {

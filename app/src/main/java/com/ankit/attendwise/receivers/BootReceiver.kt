@@ -13,15 +13,20 @@ import kotlinx.coroutines.launch
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        // We only care about the BOOT_COMPLETED action
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == "android.intent.action.MY_PACKAGE_REPLACED") {
+        val action = intent.action
+        if (action == Intent.ACTION_BOOT_COMPLETED || 
+            action == "android.intent.action.MY_PACKAGE_REPLACED" ||
+            action == Intent.ACTION_TIMEZONE_CHANGED ||
+            action == "android.intent.action.TIME_SET" ||
+            action == "android.intent.action.TIME_CHANGED") {
+            
             val pendingResult = goAsync()
             // It's safe to launch a coroutine here to do the work off the main thread
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val dao = AppDatabase.getDatabase(context).attendanceDao()
 
-                    // Get all subjects from the database
+                    // Get all subjects from the database (DAO already filters out the internal System subject)
                     val allSubjects = dao.getAllSubjects().first()
 
                     // For each subject, get its schedules and reschedule the alarms

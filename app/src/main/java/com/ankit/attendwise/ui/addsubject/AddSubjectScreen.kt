@@ -12,7 +12,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,11 +32,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.ankit.attendwise.data.ClassSchedule
 import com.ankit.attendwise.data.Subject
 import com.ankit.attendwise.utils.ColorUtils
 import com.ankit.attendwise.viewmodel.AppViewModel
+import androidx.compose.ui.res.stringResource
+import com.ankit.attendwise.R
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -78,8 +88,8 @@ fun AddSubjectScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Discard Changes?") },
-            text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
+            title = { Text(stringResource(R.string.dialog_discard_changes_title)) },
+            text = { Text(stringResource(R.string.dialog_discard_changes_text)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -87,18 +97,39 @@ fun AddSubjectScreen(
                         navController.popBackStack()
                     },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Discard") }
+                ) { Text(stringResource(R.string.action_discard)) }
             },
             dismissButton = { 
-                TextButton({ showDiscardDialog = false }) { Text("Cancel") } 
+                TextButton({ showDiscardDialog = false }) { Text(stringResource(R.string.action_cancel)) } 
             }
         )
     }
 
     val isEditMode = subjectId.isNotEmpty()
+    val allExistingSchedules by appViewModel.allSchedules.collectAsStateWithLifecycle()
+
     val hasInvalidSchedules = schedules.any { 
         it.schedule.startHour > it.schedule.endHour || 
         (it.schedule.startHour == it.schedule.endHour && it.schedule.startMinute >= it.schedule.endMinute)
+    }
+    
+    val hasOverlappingSchedules = remember(schedules, allExistingSchedules, subjectId) {
+        // Check local schedules AND schedules from other subjects
+        val otherSubjectSchedules = allExistingSchedules.filter { it.subjectId != subjectId }
+        val currentSubjectSchedules = schedules.map { it.schedule }
+        val combined = currentSubjectSchedules + otherSubjectSchedules
+
+        combined.groupBy { it.dayOfWeek }.any { (_, daySchedules) ->
+            val sorted = daySchedules.sortedWith(compareBy({ it.startHour }, { it.startMinute }))
+            for (i in 0 until sorted.size - 1) {
+                val current = sorted[i]
+                val next = sorted[i + 1]
+                val currentEnd = current.endHour * 60 + current.endMinute
+                val nextStart = next.startHour * 60 + next.startMinute
+                if (currentEnd > nextStart) return@any true
+            }
+            false
+        }
     }
 
     var isInitialized by remember { mutableStateOf(false) }
@@ -121,8 +152,8 @@ fun AddSubjectScreen(
     if (scheduleToDelete != null) {
         AlertDialog(
             onDismissRequest = { scheduleToDelete = null },
-            title = { Text("Remove Schedule") },
-            text = { Text("Are you sure you want to remove this class schedule?") },
+            title = { Text(stringResource(R.string.dialog_remove_schedule_title)) },
+            text = { Text(stringResource(R.string.dialog_remove_schedule_text)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -130,19 +161,19 @@ fun AddSubjectScreen(
                         scheduleToDelete = null
                     },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Remove") }
+                ) { Text(stringResource(R.string.action_remove)) }
             },
-            dismissButton = { TextButton({ scheduleToDelete = null }) { Text("Cancel") } }
+            dismissButton = { TextButton({ scheduleToDelete = null }) { Text(stringResource(R.string.action_cancel)) } }
         )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isEditMode) "Edit Subject" else "Add Subject") },
+                title = { Text(if (isEditMode) stringResource(R.string.edit_subject_title) else stringResource(R.string.add_subject_title)) },
                 navigationIcon = {
                     IconButton(onClick = { onBackRequest() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
@@ -155,18 +186,19 @@ fun AddSubjectScreen(
                                 color = subjectColor,
                                 targetAttendance = attendanceTarget
                             )
+                            val schedulesList: List<com.ankit.attendwise.data.ClassSchedule> = schedules.map { it.schedule }
                             appViewModel.addOrUpdateSubject(
                                 newSubject,
-                                schedules.map { it.schedule },
+                                schedulesList,
                                 pastPresent.toIntOrNull() ?: 0,
                                 pastAbsent.toIntOrNull() ?: 0
                             )
                             hasChanges = false
                             navController.popBackStack()
                         },
-                        enabled = subjectName.isNotBlank() && schedules.isNotEmpty() && !hasInvalidSchedules
+                        enabled = subjectName.isNotBlank() && schedules.isNotEmpty() && !hasInvalidSchedules && !hasOverlappingSchedules
                     ) {
-                        Text(if (isEditMode) "UPDATE" else "SAVE")
+                        Text(if (isEditMode) stringResource(R.string.action_update) else stringResource(R.string.action_save))
                     }
                 }
             )
@@ -184,7 +216,7 @@ fun AddSubjectScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (hasInvalidSchedules) {
+            if (hasInvalidSchedules || hasOverlappingSchedules) {
                 item {
                     Surface(
                         color = MaterialTheme.colorScheme.errorContainer,
@@ -195,7 +227,7 @@ fun AddSubjectScreen(
                             Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Some schedules have end times before or equal to start times. Please fix them.",
+                                if (hasInvalidSchedules) stringResource(R.string.error_invalid_schedules) else stringResource(R.string.error_overlapping_schedules),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -207,7 +239,7 @@ fun AddSubjectScreen(
                 OutlinedTextField(
                     value = subjectName,
                     onValueChange = { subjectName = it },
-                    label = { Text("Subject Name") },
+                    label = { Text(stringResource(R.string.label_subject_name)) },
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Default.Book, null) }
                 )
@@ -232,11 +264,11 @@ fun AddSubjectScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Class Schedule", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.label_class_schedule), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     FilledTonalButton(onClick = { showAddScheduleDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Schedule")
+                        Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
-                        Text("Add")
+                        Text(stringResource(R.string.action_add))
                     }
                 }
             }
@@ -244,7 +276,7 @@ fun AddSubjectScreen(
                 item {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            "No schedules added yet. Click 'Add' to create one.",
+                            stringResource(R.string.no_schedules_text),
                             modifier = Modifier.padding(16.dp),
                             textAlign = TextAlign.Center
                         )
@@ -277,7 +309,7 @@ private fun ColorPicker(selectedColor: String, onColorSelected: (String) -> Unit
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                "Subject Color",
+                stringResource(R.string.label_subject_color),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -325,7 +357,7 @@ private fun AttendanceTargetSlider(target: Int, onTargetChange: (Int) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                Text("Attendance Target", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.label_attendance_target), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text("$target%", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
             Slider(
@@ -347,22 +379,22 @@ private fun PastAttendanceInput(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Past Attendance (Optional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.label_past_attendance), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            Text("Add previous classes if you're already tracking this subject elsewhere.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.label_past_attendance_subtitle), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
                     value = presentCount,
                     onValueChange = { if (it.all { char -> char.isDigit() }) onPresentChange(it) },
-                    label = { Text("Attended") },
+                    label = { Text(stringResource(R.string.stat_attended)) },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
                 OutlinedTextField(
                     value = absentCount,
                     onValueChange = { if (it.all { char -> char.isDigit() }) onAbsentChange(it) },
-                    label = { Text("Missed") },
+                    label = { Text(stringResource(R.string.stat_missed)) },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
                 )
@@ -411,7 +443,7 @@ private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedu
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CalendarToday, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Add Class Schedule")
+                Text(stringResource(R.string.dialog_add_schedule_title))
             }
         },
         text = {
@@ -419,19 +451,19 @@ private fun AddScheduleDialog(onDismiss: () -> Unit, onAddSchedule: (ClassSchedu
                 Divider(modifier = Modifier.padding(bottom = 16.dp))
                 DaySelector(selectedDay) { selectedDay = it }
                 Spacer(Modifier.height(16.dp))
-                TimeSelector("Start Time", startHour, startMinute) { startTimePickerDialog.show() }
+                TimeSelector(stringResource(R.string.label_start_time), startHour, startMinute) { startTimePickerDialog.show() }
                 Spacer(Modifier.height(8.dp))
-                TimeSelector("End Time", endHour, endMinute) { endTimePickerDialog.show() }
+                TimeSelector(stringResource(R.string.label_end_time), endHour, endMinute) { endTimePickerDialog.show() }
             }
         },
         confirmButton = {
             Button(onClick = {
                 onAddSchedule(ClassSchedule(id = "", subjectId = "", dayOfWeek = selectedDay, startHour = startHour, startMinute = startMinute, endHour = endHour, endMinute = endMinute))
                 onDismiss()
-            }) { Text("Add") }
+            }) { Text(stringResource(R.string.action_add)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -444,7 +476,7 @@ private fun DaySelector(selectedDay: Int, onDaySelected: (Int) -> Unit) {
         "Thu" to Calendar.THURSDAY, "Fri" to Calendar.FRIDAY, "Sat" to Calendar.SATURDAY, "Sun" to Calendar.SUNDAY
     )
     Column {
-        Text("Day of the week", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.label_day_of_week), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(days) { (dayName, dayConstant) ->

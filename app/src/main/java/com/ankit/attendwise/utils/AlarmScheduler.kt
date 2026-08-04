@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.ankit.attendwise.data.ClassSchedule
 import com.ankit.attendwise.data.Subject
@@ -19,13 +20,12 @@ import java.util.*
 object AlarmScheduler {
     private const val TAG = "AlarmScheduler"
 
-    fun scheduleClassAlarm(context: Context, subject: Subject, schedule: ClassSchedule) {
+    fun scheduleClassAlarm(context: Context, subject: Subject, schedule: ClassSchedule, forceNextWeek: Boolean = false) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("subject_id", subject.id)
             putExtra("schedule_id", schedule.id)
-            putExtra("subject_name", subject.name ?: "Unknown")
         }
 
         val requestCode = schedule.id.hashCode()
@@ -48,13 +48,18 @@ object AlarmScheduler {
         val targetTime = LocalTime.of(schedule.endHour, schedule.endMinute)
         
         val now = LocalDateTime.now()
-        var alarmDateTime = now.with(TemporalAdjusters.nextOrSame(targetDayOfWeek))
-            .with(targetTime)
+        var alarmDateTime = if (forceNextWeek) {
+            now.with(TemporalAdjusters.next(targetDayOfWeek))
+        } else {
+            now.with(TemporalAdjusters.nextOrSame(targetDayOfWeek))
+        }
+        
+        alarmDateTime = alarmDateTime.with(targetTime)
             .withSecond(0)
             .withNano(0)
 
         // If the calculated time for today has already passed, schedule for next week
-        if (alarmDateTime.isBefore(now.plusSeconds(10))) {
+        if (!forceNextWeek && alarmDateTime.isBefore(now.plusSeconds(10))) {
             alarmDateTime = alarmDateTime.with(TemporalAdjusters.next(targetDayOfWeek))
         }
 
@@ -63,6 +68,12 @@ object AlarmScheduler {
         Log.d(TAG, "Scheduling alarm for ${subject.name ?: "Unknown"} at: ${alarmDateTime.format(formatter)}")
 
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (!alarmManager.canScheduleExactAlarms()) {
+                    Log.e(TAG, "Cannot schedule exact alarm: Permission missing (SCHEDULE_EXACT_ALARM)")
+                    return
+                }
+            }
             val clockInfo = AlarmManager.AlarmClockInfo(triggerTimeMs, null)
             alarmManager.setAlarmClock(clockInfo, pendingIntent)
             Log.d(TAG, "Alarm successfully set.")
@@ -73,7 +84,10 @@ object AlarmScheduler {
 
     fun cancelClassAlarm(context: Context, schedule: ClassSchedule) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, AlarmReceiver::class.java)
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("subject_id", schedule.subjectId)
+            putExtra("schedule_id", schedule.id)
+        }
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             schedule.id.hashCode(),

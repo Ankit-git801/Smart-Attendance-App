@@ -25,7 +25,7 @@ import java.util.UUID
 )
 data class ClassSchedule(
     @PrimaryKey
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = "",
     var subjectId: String = "",
     val dayOfWeek: Int = 0,
     val startHour: Int = 0,

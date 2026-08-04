@@ -7,14 +7,172 @@
     <string name="nav_stats">Stats</string>
     <string name="nav_settings">Settings</string>
 
-    <!-- Attendance -->
+    <!-- General Actions -->
+    <string name="action_ok">OK</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_save">Save</string>
+    <string name="action_update">Update</string>
+    <string name="action_add">Add</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_back">Back</string>
+    <string name="action_close">Close</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_later">Later</string>
+    <string name="action_discard">Discard</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="feedback_extra_class_added">Extra class added successfully</string>
+    <string name="feedback_past_records_added">Past records added successfully</string>
+    <string name="feedback_attendance_updated">Attendance record updated</string>
+
+    <!-- Attendance Status -->
     <string name="mark_present">Present</string>
     <string name="mark_absent">Absent</string>
     <string name="mark_cancelled">Cancelled</string>
     <string name="mark_holiday">Holiday</string>
+    <string name="marked_as_present">Marked as Present</string>
+    <string name="marked_as_absent">Marked as Absent</string>
+    <string name="class_cancelled">Class Cancelled</string>
 
     <!-- Bunk Analysis -->
     <string name="bunk_safe">You can bunk %1$d classes.</string>
     <string name="bunk_risk">Attend next %1$d classes.</string>
     <string name="bunk_on_track">On track!</string>
+
+    <!-- Home Screen -->
+    <string name="greeting_morning">Good Morning</string>
+    <string name="greeting_afternoon">Good Afternoon</string>
+    <string name="greeting_evening">Good Evening</string>
+    <string name="greeting_student">Student</string>
+    <string name="section_todays_classes">TODAY\'S CLASSES</string>
+    <string name="section_all_subjects">ALL SUBJECTS</string>
+    <string name="holiday_title">Public Holiday</string>
+    <string name="holiday_subtitle">Today is marked as a holiday. All classes are suspended. Enjoy your break!</string>
+    <string name="no_classes_title">No Classes Today</string>
+    <string name="no_classes_subtitle">You have no classes scheduled for today.</string>
+    <string name="no_subjects_title">No Subjects Yet</string>
+    <string name="no_subjects_subtitle">Add your subjects to start tracking your attendance.</string>
+    <string name="action_add_subject">Add Subject</string>
+    <string name="extra_class_dialog_title">Add Extra Class</string>
+    <string name="extra_class_no_subjects">No subjects available. Add a subject first.</string>
+    <string name="extra_class_subject">Subject</string>
+    <string name="extra_class_status">Status</string>
+    <string name="extra_class_count">Count</string>
+    <string name="live_badge">LIVE</string>
+    <string name="attendance_label">Attendance</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="section_cloud_account">Cloud Account</string>
+    <string name="section_personalization">Personalization</string>
+    <string name="section_general">General</string>
+    <string name="section_data_management">Data Management</string>
+    <string name="section_system_permissions">System &amp; Permissions</string>
+    <string name="section_about">About</string>
+    <string name="setting_user_name">User Name</string>
+    <string name="setting_theme">Theme</string>
+    <string name="setting_weekly_schedule">Weekly Schedule</string>
+    <string name="setting_weekly_schedule_subtitle">View all your classes for the week</string>
+    <string name="setting_send_feedback">Send Feedback</string>
+    <string name="setting_send_feedback_subtitle">Report bugs or suggest features</string>
+    <string name="setting_delete_data">Delete All Data</string>
+    <string name="setting_delete_data_subtitle">Remove all subjects and records</string>
+    <string name="setting_battery_optimization">Battery Optimization</string>
+    <string name="setting_battery_optimization_subtitle">Required for reliable notifications</string>
+    <string name="setting_exact_alarms">Exact Alarms</string>
+    <string name="setting_exact_alarms_subtitle">Ensure reminders fire on time</string>
+    <string name="dialog_delete_all_title">Delete All Data?</string>
+    <string name="dialog_delete_all_text">This will permanently delete all subjects, schedules, and attendance records, including holidays. This action cannot be undone.</string>
+    <string name="dialog_delete_all_confirm">Delete Everything</string>
+    <string name="dialog_change_name_title">Change Your Name</string>
+    <string name="label_name">Name</string>
+    <string name="dialog_choose_theme_title">Choose Theme</string>
+    <string name="theme_system">System Default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="about_text">AttendWise v1.0\nCopyright © 2026 Ankit. All rights reserved.</string>
+    <string name="dialog_sign_out_title">Sign Out</string>
+    <string name="dialog_sign_out_text">Are you sure you want to sign out? Your local data will be cleared, but your cloud backup will remain safe.</string>
+    <string name="dialog_auth_signup_title">Create Account</string>
+    <string name="dialog_auth_signin_title">Sign In</string>
+    <string name="label_email">Email</string>
+    <string name="label_password">Password</string>
+    <string name="auth_switch_to_signin">Already have an account? Sign In</string>
+    <string name="auth_switch_to_signup">Don\'t have an account? Sign Up</string>
+    <string name="auth_enter_email_reset">Enter your email to reset password</string>
+    <string name="auth_reset_sent">Password reset email sent!</string>
+    <string name="auth_forgot_password">Forgot Password?</string>
+    <string name="error_fill_fields">Please fill all fields</string>
+    <string name="error_wrong_password">Wrong password. Please try again.</string>
+    <string name="error_user_not_found">No account found with this email.</string>
+    <string name="error_auth_failed">Authentication failed</string>
+    <string name="backup_status_syncing">Syncing with cloud…</string>
+    <string name="backup_status_account">Account: %1$s. Data is automatically synced with the cloud.</string>
+    <string name="backup_status_no_account">Connect an account to backup your data across devices.</string>
+    <string name="action_connect_account">Connect Account</string>
+    <string name="action_sign_out">Sign Out</string>
+    <string name="action_sign_up">Sign Up</string>
+    <string name="action_sign_in">Sign In</string>
+    <string name="error_no_email_app">No email app found</string>
+    <string name="error_holiday_manual_mark">Cannot mark attendance: This day is marked as a Holiday.</string>
+    <string name="dialog_extra_class_confirm_title">Confirm Extra Class</string>
+    <string name="dialog_extra_class_confirm_text">Are you sure you want to add %1$d extra class(es) for %2$s?</string>
+
+    <!-- Subject Detail Screen -->
+    <string name="subject_details_title">Subject Details</string>
+    <string name="dialog_delete_record_title">Delete Record</string>
+    <string name="dialog_delete_record_text">Are you sure you want to delete this attendance record?</string>
+    <string name="dialog_clear_attendance_title">Clear Attendance</string>
+    <string name="dialog_clear_attendance_text">Are you sure you want to clear all attendance records for this date?</string>
+    <string name="dialog_delete_subject_title">Delete Subject</string>
+    <string name="dialog_delete_subject_text">Are you sure you want to delete \'%1$s\'? This will also delete all its attendance records and schedules.</string>
+    <string name="dialog_manual_add_title">Add Past Attendance</string>
+    <string name="dialog_manual_add_text">Enter the number of classes you\'ve already attended or missed.</string>
+    <string name="label_attended_present">Total Attended (Present)</string>
+    <string name="label_missed_absent">Total Missed (Absent)</string>
+    <string name="action_add_records">Add Records</string>
+    <string name="attendance_history_label">Attendance History</string>
+    <string name="action_clear_day">Clear Day</string>
+    <string name="holiday_info_text">This day is marked as a Public Holiday. Alarms are disabled and attendance cannot be marked.</string>
+    <string name="stat_total">Total</string>
+    <string name="stat_attended">Attended</string>
+    <string name="stat_missed">Missed</string>
+    <string name="bunk_analysis_safe_extended">You can bunk %1$d classes while staying above your %2$d%% target.</string>
+    <string name="bunk_analysis_risk_extended">You must attend the next %1$d classes to reach your %2$d%% target.</string>
+    <string name="bunk_analysis_on_track_extended">You are exactly on track to meet your %1$d%% target!</string>
+
+    <!-- Add/Edit Subject Screen -->
+    <string name="add_subject_title">Add Subject</string>
+    <string name="edit_subject_title">Edit Subject</string>
+    <string name="dialog_discard_changes_title">Discard Changes?</string>
+    <string name="dialog_discard_changes_text">You have unsaved changes. Are you sure you want to discard them?</string>
+    <string name="dialog_remove_schedule_title">Remove Schedule</string>
+    <string name="dialog_remove_schedule_text">Are you sure you want to remove this class schedule?</string>
+    <string name="error_invalid_schedules">Some schedules have end times before or equal to start times. Please fix them.</string>
+    <string name="error_overlapping_schedules">Some schedules overlap on the same day. Please fix them.</string>
+    <string name="label_subject_name">Subject Name</string>
+    <string name="label_subject_color">Subject Color</string>
+    <string name="label_attendance_target">Attendance Target</string>
+    <string name="label_past_attendance">Past Attendance (Optional)</string>
+    <string name="label_past_attendance_subtitle">Add previous classes if you\'re already tracking this subject elsewhere.</string>
+    <string name="label_class_schedule">Class Schedule</string>
+    <string name="no_schedules_text">No schedules added yet. Click \'Add\' to create one.</string>
+    <string name="dialog_add_schedule_title">Add Class Schedule</string>
+    <string name="label_start_time">Start Time</string>
+    <string name="label_end_time">End Time</string>
+    <string name="label_day_of_week">Day of the week</string>
+
+    <!-- Onboarding -->
+    <string name="welcome_title">Welcome to\nAttendWise</string>
+    <string name="welcome_subtitle">Stay organized and never miss a target. Choose how you want to start.</string>
+    <string name="action_signup_later">Sign Up Later (Offline Mode)</string>
+    <string name="personalize_title">Personalize Your App</string>
+    <string name="personalize_subtitle">What should we call you?</string>
+    <string name="label_enter_name">Enter Your Name</string>
+    <string name="action_get_started">Get Started</string>
+
+    <!-- Permissions -->
+    <string name="perm_notifications_rationale_title">Enable Notifications</string>
+    <string name="perm_notifications_rationale_text">Allow notifications to receive class reminders and mark your attendance directly from your lock screen or notification shade.</string>
 </resources>

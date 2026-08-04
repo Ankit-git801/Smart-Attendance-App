@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
@@ -81,14 +82,18 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 
 class MainActivity : ComponentActivity() {
+    private lateinit var viewModel: AppViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         NotificationHelper.createNotificationChannel(this)
+        
+        viewModel = androidx.lifecycle.ViewModelProvider(this)[AppViewModel::class.java]
 
         setContent {
-            val appViewModel: AppViewModel = viewModel()
+            val appViewModel = viewModel
             val context = LocalContext.current
 
             LaunchedEffect(Unit) {
@@ -127,6 +132,25 @@ class MainActivity : ComponentActivity() {
                 }
 
                 AttendWiseApp(appViewModel = appViewModel)
+            }
+        }
+        
+        // Initial check for intent when app starts
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val subjectId = intent?.getStringExtra("subject_id")
+        if (!subjectId.isNullOrEmpty()) {
+            if (::viewModel.isInitialized) {
+                viewModel.triggerNavigation(subjectId)
+                intent.removeExtra("subject_id")
             }
         }
     }
@@ -189,6 +213,7 @@ fun RequestNotificationPermission() {
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PermissionChecker.PERMISSION_GRANTED
             )
         }
+        var showRationale by remember { mutableStateOf(false) }
 
         val launcher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
@@ -197,10 +222,31 @@ fun RequestNotificationPermission() {
             }
         )
 
-        if (!hasPermission) {
-            LaunchedEffect(Unit) {
-                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        LaunchedEffect(hasPermission) {
+            if (!hasPermission) {
+                showRationale = true
             }
+        }
+
+        if (showRationale) {
+            AlertDialog(
+                onDismissRequest = { showRationale = false },
+                title = { Text(stringResource(R.string.perm_notifications_rationale_title)) },
+                text = { Text(stringResource(R.string.perm_notifications_rationale_text)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showRationale = false
+                        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }) {
+                        Text(stringResource(R.string.action_ok))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRationale = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
         }
     }
 }
@@ -257,18 +303,21 @@ fun RequestBatteryOptimizationPermission() {
     }
 }
 
-// DEFINITIVE FIX: A dialog to guide users to manufacturer-specific settings.
 @Composable
 fun RequestManufacturerBatteryOptimization() {
     val context = LocalContext.current
     val manufacturer = Build.MANUFACTURER.lowercase()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val locale = configuration.locales[0]
     var showDialog by remember { mutableStateOf(false) }
 
     val intent = remember {
         when {
             manufacturer == "oneplus" -> Intent().setComponent(ComponentName("com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"))
             manufacturer == "oppo" -> Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"))
-            // Add other manufacturers here if needed
+            manufacturer == "vivo" -> Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"))
+            manufacturer == "xiaomi" -> Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
+            manufacturer == "samsung" -> Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity"))
             else -> null
         }
     }
@@ -283,7 +332,10 @@ fun RequestManufacturerBatteryOptimization() {
         AlertDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("Additional Step Required") },
-            text = { Text("Your device has aggressive battery optimizations that may prevent notifications. Please find this app in the list and enable 'Allow auto-launch' or disable any deep sleep/optimization settings.") },
+            text = { 
+                val manufacturerName = manufacturer.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+                Text("Your $manufacturerName device has aggressive battery optimizations that may prevent notifications. Please find 'AttendWise' in the list and enable 'Allow auto-launch' or 'Run in background' to ensure reminders work correctly.") 
+            },
             confirmButton = {
                 Button(onClick = {
                     showDialog = false
@@ -291,9 +343,16 @@ fun RequestManufacturerBatteryOptimization() {
                         context.startActivity(intent)
                     } catch (e: Exception) {
                         // Fallback if the specific activity is not found
-                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                        try {
+                            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                        } catch (e2: Exception) {}
                     }
-                }) { Text("Open App Launch Settings") }
+                }) { Text("Open App Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("I've already done this")
+                }
             }
         )
     }
@@ -312,13 +371,11 @@ fun AttendWiseApp(appViewModel: AppViewModel) {
     val currentDestination = navBackStackEntry?.destination
     val isOnboardingComplete by appViewModel.isOnboardingComplete.collectAsStateWithLifecycle()
 
-    // SMART NAV: Handle navigation from notifications with race condition safety
+    // ATTENDWISE NAV: Handle navigation from notifications with race condition safety
+    // The event is stored in a buffered Channel in ViewModel until collected here
     LaunchedEffect(isOnboardingComplete) {
         if (isOnboardingComplete == true) {
-            val activity = context as? ComponentActivity
-            val subjectId = activity?.intent?.getStringExtra("subject_id")
-            
-            if (!subjectId.isNullOrEmpty()) {
+            appViewModel.navigationEvents.collect { subjectId ->
                 try {
                     navController.navigate("subject_detail/$subjectId") {
                         launchSingleTop = true
@@ -326,7 +383,6 @@ fun AttendWiseApp(appViewModel: AppViewModel) {
                 } catch (e: Exception) {
                     Log.e("MainActivity", "Navigation failed: ${e.message}")
                 }
-                activity?.intent?.removeExtra("subject_id")
             }
         }
     }

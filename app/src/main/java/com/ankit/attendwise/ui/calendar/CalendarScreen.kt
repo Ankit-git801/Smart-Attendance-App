@@ -11,7 +11,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -50,11 +54,13 @@ fun CalendarScreen(navController: NavController, appViewModel: AppViewModel) {
     var showDeleteConfirmation by remember { mutableStateOf<String?>(null) }
     var showHolidayConfirmation by remember { mutableStateOf(false) }
 
-    val recordsForSelectedDate by if (selectedDate != null) {
-        appViewModel.getRecordsForDate(selectedDate!!).collectAsStateWithLifecycle(initialValue = emptyList())
-    } else {
-        remember { mutableStateOf(emptyList<AttendanceRecordWithSubject>()) }
-    }
+    val recordsForSelectedDate by remember(selectedDate) {
+        if (selectedDate != null) {
+            appViewModel.getRecordsForDate(selectedDate!!)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     if (showDeleteConfirmation != null) {
         AlertDialog(
@@ -348,6 +354,8 @@ fun AttendanceCalendar(
     }
 
     val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val locale = configuration.locales[0]
 
     Column {
         val visibleMonth = state.firstVisibleMonth.yearMonth
@@ -368,7 +376,7 @@ fun AttendanceCalendar(
             }
 
             Text(
-                text = "${visibleMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${visibleMonth.year}",
+                text = "${visibleMonth.month.getDisplayName(TextStyle.FULL, locale)} ${visibleMonth.year}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center

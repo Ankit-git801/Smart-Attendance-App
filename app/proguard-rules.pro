@@ -1,43 +1,37 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# AttendWise ProGuard Rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# Firebase/Firestore
--keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
-
-# Data Models - Preserve exact names for Firestore/Room
--keep class com.ankit.attendwise.data.** { *; }
--keepclassmembers class com.ankit.attendwise.data.** {
-    <fields>;
-    <init>(...);
-}
--keepclassmembernames class com.ankit.attendwise.data.** {
-    <fields>;
-    <init>(...);
-}
-
+# 1. General Optimization Rules
 -keepattributes *Annotation*
 -keepattributes Signature
+-keepattributes SourceFile,LineNumberTable
 
-# Room
--keep class androidx.room.** { *; }
--keep class * extends androidx.room.RoomDatabase
--keep class * implements androidx.room.RoomOpenHelper
+# 2. Your Data Models (Keep for Firestore/Room reflection)
+# If you use reflection or Firestore's automatic mapping, keep these.
+-keep class com.ankit.attendwise.data.** { *; }
+-keep class com.ankit.attendwise.models.** { *; }
 
-# Coroutines
--keep class kotlinx.coroutines.** { *; }
+# 3. Firebase / Google Services
+# Most Firebase libraries include their own ProGuard rules.
+# Only add these if you see specific warnings about missing Firebase classes.
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+
+# 4. Room
+# Room handles its own ProGuard rules via the compiler.
+# Manual keep rules are usually unnecessary.
+-dontwarn androidx.room.**
+
+# 5. Compose
+# Compose handles its own rules. Broadly keeping all of Compose is unnecessary.
+-dontwarn androidx.compose.**
+
+# 6. Kizitonwose Calendar
+# This library might need specific keeps if it uses reflection for view binding or similar.
+-keep class com.kizitonwose.calendar.** { *; }
+
+# 7. Common R8/ProGuard Fixes
+-ignorewarnings
+-keep class androidx.lifecycle.DefaultLifecycleObserver
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-keepattributes *Annotation*,Signature,EnclosingMethod,InnerClasses

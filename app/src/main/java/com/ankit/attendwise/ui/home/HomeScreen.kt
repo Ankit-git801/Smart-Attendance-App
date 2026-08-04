@@ -13,7 +13,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EventBusy
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.WbCloudy
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,14 +53,17 @@ import com.ankit.attendwise.ui.theme.ErrorRed
 import com.ankit.attendwise.ui.theme.PoppinsFamily
 import com.ankit.attendwise.ui.theme.SuccessGreen
 import com.ankit.attendwise.utils.ColorUtils
+import com.ankit.attendwise.utils.Constants.ID_SCHEDULE_EXTRA
 import com.ankit.attendwise.viewmodel.AppViewModel
+import androidx.compose.ui.res.stringResource
+import com.ankit.attendwise.R
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.*
 
 data class GreetingInfo(
-    val greetingText: String,
+    val greetingResId: Int,
     val icon: ImageVector,
     val gradientColors: List<Color>
 )
@@ -57,25 +73,25 @@ fun getGreetingInfo(): GreetingInfo {
     return when (hour) {
         // Morning: 4:00 AM - 12:00 PM (Sunrise shade)
         in 4..11 -> GreetingInfo(
-            "Good Morning",
+            R.string.greeting_morning,
             Icons.Default.WbSunny,
             listOf(Color(0xFFFF9800), Color(0xFFFFE082))
         )
         // Afternoon: 12:00 PM - 4:00 PM (Noon shade)
         in 12..15 -> GreetingInfo(
-            "Good Afternoon",
+            R.string.greeting_afternoon,
             Icons.Default.WbCloudy,
             listOf(Color(0xFF00B0FF), Color(0xFF80D8FF))
         )
         // Early Evening: 4:00 PM - 8:00 PM (Current Blue-Orange shade)
         in 16..19 -> GreetingInfo(
-            "Good Evening",
+            R.string.greeting_evening,
             Icons.Default.WbTwilight,
             listOf(Color(0xFCFF4E4E), Color(0xFFFFEB3B))
         )
         // Late Evening/Night: 8:00 PM - 4:00 AM (Good Evening with Night shade)
         else -> GreetingInfo(
-            "Good Evening",
+            R.string.greeting_evening,
             Icons.Default.NightsStay,
             listOf(Color(0xFF311B92), Color(0xFF1A237E))
         )
@@ -122,7 +138,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
 
         item {
             Text(
-                "TODAY'S CLASSES",
+                stringResource(R.string.section_todays_classes),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -134,9 +150,9 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             item {
                 EmptyState(
                     icon = Icons.Default.WbSunny,
-                    title = "Public Holiday",
-                    subtitle = "Today is marked as a holiday. All classes are suspended. Enjoy your break!",
-                    actionLabel = "Remove Holiday",
+                    title = stringResource(R.string.holiday_title),
+                    subtitle = stringResource(R.string.holiday_subtitle),
+                    actionLabel = stringResource(R.string.action_remove) + " " + stringResource(R.string.mark_holiday),
                     onActionClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         appViewModel.onHolidayToggleRequested(LocalDate.now()) 
@@ -147,8 +163,8 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             item {
                 EmptyState(
                     icon = Icons.Default.CalendarToday,
-                    title = "No Classes Today",
-                    subtitle = "You have no classes scheduled for today."
+                    title = stringResource(R.string.no_classes_title),
+                    subtitle = stringResource(R.string.no_classes_subtitle)
                 )
             }
         } else {
@@ -163,7 +179,7 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
 
         item {
             Text(
-                "ALL SUBJECTS",
+                stringResource(R.string.section_all_subjects),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -175,9 +191,9 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
             item {
                 EmptyState(
                     icon = Icons.Default.MenuBook,
-                    title = "No Subjects Yet",
-                    subtitle = "Add your subjects to start tracking your attendance.",
-                    actionLabel = "Add Subject",
+                    title = stringResource(R.string.no_subjects_title),
+                    subtitle = stringResource(R.string.no_subjects_subtitle),
+                    actionLabel = stringResource(R.string.action_add_subject),
                     onActionClick = { navController.navigate("add_subject") }
                 )
             }
@@ -196,12 +212,40 @@ fun HomeScreen(navController: NavController, appViewModel: AppViewModel) {
     }
 
     if (showExtraClassDialog) {
+        var pendingConfirmationData by remember { mutableStateOf<Triple<String, Boolean, Int>?>(null) }
+
+        if (pendingConfirmationData != null) {
+            val (subId, present, count) = pendingConfirmationData!!
+            val subjectName = allSubjects.find { it.id == subId }?.name ?: "Subject"
+            
+            AlertDialog(
+                onDismissRequest = { pendingConfirmationData = null },
+                title = { Text(stringResource(R.string.dialog_extra_class_confirm_title)) },
+                text = { Text(stringResource(R.string.dialog_extra_class_confirm_text, count, subjectName)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            appViewModel.addExtraClasses(subId, LocalDate.now(), present, count)
+                            pendingConfirmationData = null
+                            showExtraClassDialog = false
+                        },
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(stringResource(R.string.action_confirm)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingConfirmationData = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
         ExtraClassDialog(
             subjects = allSubjects,
             onDismiss = { showExtraClassDialog = false },
             onConfirm = { subjectId, isPresent, count ->
-                appViewModel.addExtraClasses(subjectId, LocalDate.now(), isPresent, count)
-                showExtraClassDialog = false
+                pendingConfirmationData = Triple(subjectId, isPresent, count)
             }
         )
     }
@@ -219,13 +263,13 @@ fun ExtraClassDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Extra Class") },
+        title = { Text(stringResource(R.string.extra_class_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (subjects.isEmpty()) {
-                    Text("No subjects available. Add a subject first.")
+                    Text(stringResource(R.string.extra_class_no_subjects))
                 } else {
-                    Text("Subject", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.extra_class_subject), fontWeight = FontWeight.Bold)
                     
                     @OptIn(ExperimentalLayoutApi::class)
                     FlowRow(
@@ -248,12 +292,12 @@ fun ExtraClassDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Status", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.extra_class_status), fontWeight = FontWeight.Bold)
                         Row {
                             FilterChip(
                                 selected = isPresent,
                                 onClick = { isPresent = true },
-                                label = { Text("Present") },
+                                label = { Text(stringResource(R.string.mark_present)) },
                                 leadingIcon = if (isPresent) {
                                     { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) }
                                 } else null,
@@ -263,7 +307,7 @@ fun ExtraClassDialog(
                             FilterChip(
                                 selected = !isPresent,
                                 onClick = { isPresent = false },
-                                label = { Text("Absent") },
+                                label = { Text(stringResource(R.string.mark_absent)) },
                                 leadingIcon = if (!isPresent) {
                                     { Icon(Icons.Default.Close, null, Modifier.size(18.dp)) }
                                 } else null,
@@ -277,7 +321,7 @@ fun ExtraClassDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Count", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.extra_class_count), fontWeight = FontWeight.Bold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { if (count > 1) count-- }) {
                                 Icon(Icons.Default.Remove, null)
@@ -300,13 +344,13 @@ fun ExtraClassDialog(
                 onClick = { onConfirm(selectedSubjectId, isPresent, count) },
                 enabled = subjects.isNotEmpty(),
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Add") }
+            ) { Text(stringResource(R.string.action_add)) }
         },
         dismissButton = { 
             TextButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Cancel") } 
+            ) { Text(stringResource(R.string.action_cancel)) } 
         }
     )
 }
@@ -346,7 +390,7 @@ fun GreetingCard(userName: String, currentDate: LocalDate) {
                 
                 Column {
                     Text(
-                        text = "${greetingInfo.greetingText}, ${userName.ifEmpty { "Student" }} !",
+                        text = "${stringResource(greetingInfo.greetingResId)}, ${userName.ifEmpty { stringResource(R.string.greeting_student) }} !",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -431,13 +475,13 @@ fun QuickActions(onNewSubjectClick: () -> Unit, onExtraClassClick: () -> Unit) {
         QuickActionCard(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.PlaylistAdd,
-            title = "Extra Class",
+            title = stringResource(R.string.extra_class_dialog_title),
             onClick = onExtraClassClick
         )
         QuickActionCard(
             modifier = Modifier.weight(1f),
             icon = Icons.Default.Add,
-            title = "New Subject",
+            title = stringResource(R.string.action_add_subject),
             onClick = onNewSubjectClick
         )
     }
@@ -502,7 +546,8 @@ fun TodayScheduleCard(
     val startTime = remember(schedule.startHour, schedule.startMinute) { formatTime(schedule.startHour, schedule.startMinute) }
     val endTime = remember(schedule.endHour, schedule.endMinute) { formatTime(schedule.endHour, schedule.endMinute) }
     val subjectColor = remember(subject.color) { ColorUtils.safeParseColor(subject.color) }
-    val isLive = scheduleWithSubject.isCurrentClass
+    val isLive = scheduleWithSubject.isLive
+    val isExtra = record?.scheduleId == ID_SCHEDULE_EXTRA
 
     Card(
         modifier = Modifier
@@ -545,12 +590,12 @@ fun TodayScheduleCard(
                                 style = MaterialTheme.typography.titleLarge,
                             )
                             Text(
-                                text = "$startTime - $endTime",
+                                text = if (isExtra) "Extra Session" else "$startTime - $endTime",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (isLive && !isAlreadyMarked) {
+                        if (isLive && !isAlreadyMarked && !isExtra) {
                             LiveBadge()
                         }
                     }
@@ -576,8 +621,8 @@ fun TodayScheduleCard(
                     ) { marked ->
                         if (marked) {
                             val (icon, text, color) = when (recordType) {
-                                RecordType.CANCELLED -> Triple(Icons.Filled.EventBusy, "Class Cancelled", MaterialTheme.colorScheme.onSurfaceVariant)
-                                else -> if (wasPresent == true) Triple(Icons.Filled.CheckCircle, "Marked as Present", SuccessGreen) else Triple(Icons.Filled.Cancel, "Marked as Absent", ErrorRed)
+                                RecordType.CANCELLED -> Triple(Icons.Filled.EventBusy, stringResource(R.string.class_cancelled), MaterialTheme.colorScheme.onSurfaceVariant)
+                                else -> if (wasPresent == true) Triple(Icons.Filled.CheckCircle, stringResource(R.string.marked_as_present), SuccessGreen) else Triple(Icons.Filled.Cancel, stringResource(R.string.marked_as_absent), ErrorRed)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(icon, contentDescription = null, tint = color)
@@ -595,15 +640,15 @@ fun TodayScheduleCard(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilledTonalButton(
+                                FilterChip(
                                     onClick = { 
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         appViewModel.markTodayAsPresent(subject.id, schedule.id) 
                                     },
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Present")
-                                }
+                                    shape = RoundedCornerShape(12.dp),
+                                    selected = false,
+                                    label = { Text(stringResource(R.string.mark_present)) }
+                                )
                                 OutlinedButton(
                                     onClick = { 
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -611,7 +656,7 @@ fun TodayScheduleCard(
                                     },
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("Absent")
+                                    Text(stringResource(R.string.mark_absent))
                                 }
                                 IconButton(
                                     onClick = { 
@@ -665,7 +710,7 @@ fun LiveBadge() {
                     .background(MaterialTheme.colorScheme.error, CircleShape)
             )
             Text(
-                "LIVE",
+                stringResource(R.string.live_badge),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.ExtraBold
@@ -753,7 +798,7 @@ fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, bunkAnalysis: Bunk
                         color = if (percentage < subject.targetAttendance) ErrorRed else SuccessGreen
                     )
                     Text(
-                        text = "Attendance",
+                        text = stringResource(R.string.attendance_label),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -770,9 +815,9 @@ fun SubjectCard(subjectWithAttendance: SubjectWithAttendance, bunkAnalysis: Bunk
 @Composable
 fun BunkAnalysisText(analysis: BunkAnalysis) {
     val text = when {
-        analysis.classesToBunk > 0 -> "You can bunk ${analysis.classesToBunk} classes."
-        analysis.classesToAttend > 0 -> "Attend next ${analysis.classesToAttend} classes."
-        else -> "On track!"
+        analysis.classesToBunk > 0 -> stringResource(R.string.bunk_safe, analysis.classesToBunk)
+        analysis.classesToAttend > 0 -> stringResource(R.string.bunk_risk, analysis.classesToAttend)
+        else -> stringResource(R.string.bunk_on_track)
     }
     val color = if (analysis.classesToBunk > 0) SuccessGreen else if (analysis.classesToAttend > 0) ErrorRed else MaterialTheme.colorScheme.primary
 

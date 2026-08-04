@@ -15,7 +15,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudQueue
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.Login
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +42,8 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.ankit.attendwise.viewmodel.AppViewModel
 
+import androidx.compose.ui.res.stringResource
+import com.ankit.attendwise.R
 import android.widget.Toast
 
 @Composable
@@ -58,9 +70,9 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            icon = { Icon(Icons.Default.Warning, contentDescription = "Warning") },
-            title = { Text("Delete All Data?") },
-            text = { Text("This will permanently delete all subjects, schedules, and attendance records, including holidays. This action cannot be undone.") },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null) },
+            title = { Text(stringResource(R.string.dialog_delete_all_title)) },
+            text = { Text(stringResource(R.string.dialog_delete_all_text)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -68,13 +80,13 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                         showDeleteDialog = false
                     },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Delete Everything") }
+                ) { Text(stringResource(R.string.dialog_delete_all_confirm)) }
             },
             dismissButton = { 
                 TextButton(
                     onClick = { showDeleteDialog = false },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Cancel") } 
+                ) { Text(stringResource(R.string.action_cancel)) } 
             }
         )
     }
@@ -90,42 +102,42 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
         )
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Settings") }) }) { paddingValues ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.settings_title)) }) }) { paddingValues ->
         LazyColumn(
             modifier = Modifier.padding(paddingValues),
             contentPadding = PaddingValues(vertical = 16.dp),
         ) {
             item {
-                SettingsSectionTitle("Cloud Account")
+                SettingsSectionTitle(stringResource(R.string.section_cloud_account))
                 CloudSettingsItem(appViewModel)
             }
             item {
-                SettingsSectionTitle("Personalization")
+                SettingsSectionTitle(stringResource(R.string.section_personalization))
                 SettingsItem(
-                    title = "User Name",
+                    title = stringResource(R.string.setting_user_name),
                     subtitle = userName,
-                    icon = { Icon(Icons.Default.Person, contentDescription = "User Name") },
+                    icon = { Icon(Icons.Default.Person, contentDescription = null) },
                     onClick = { showNameDialog = true }
                 )
                 SettingsItem(
-                    title = "Theme",
+                    title = stringResource(R.string.setting_theme),
                     subtitle = currentTheme,
-                    icon = { Icon(Icons.Default.Palette, contentDescription = "Theme") },
+                    icon = { Icon(Icons.Default.Palette, contentDescription = null) },
                     onClick = { showThemeDialog = true }
                 )
             }
             item {
-                SettingsSectionTitle("General")
+                SettingsSectionTitle(stringResource(R.string.section_general))
                 SettingsItem(
-                    title = "Weekly Schedule",
-                    subtitle = "View all your classes for the week",
-                    icon = { Icon(Icons.Default.DateRange, contentDescription = "Weekly Schedule") },
+                    title = stringResource(R.string.setting_weekly_schedule),
+                    subtitle = stringResource(R.string.setting_weekly_schedule_subtitle),
+                    icon = { Icon(Icons.Default.DateRange, contentDescription = null) },
                     onClick = { navController.navigate("weekly_schedule") }
                 )
                 SettingsItem(
-                    title = "Send Feedback",
-                    subtitle = "Report bugs or suggest features",
-                    icon = { Icon(Icons.Default.Feedback, contentDescription = "Feedback") },
+                    title = stringResource(R.string.setting_send_feedback),
+                    subtitle = stringResource(R.string.setting_send_feedback_subtitle),
+                    icon = { Icon(Icons.Default.Feedback, contentDescription = null) },
                     onClick = {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                             data = Uri.parse("mailto:ak8485332@gmail.com")
@@ -134,31 +146,31 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                         try {
                             context.startActivity(intent)
                         } catch (e: Exception) {
-                            Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.error_no_email_app), Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
             }
             item {
-                SettingsSectionTitle("Data Management")
+                SettingsSectionTitle(stringResource(R.string.section_data_management))
                 SettingsItem(
-                    title = "Delete All Data",
-                    subtitle = "Remove all subjects and records",
+                    title = stringResource(R.string.setting_delete_data),
+                    subtitle = stringResource(R.string.setting_delete_data_subtitle),
                     isDestructive = true,
                     icon = {
                         Icon(
                             Icons.Default.DeleteForever,
-                            contentDescription = "Delete Data",
+                            contentDescription = null,
                         )
                     },
                     onClick = { showDeleteDialog = true }
                 )
             }
             item {
-                SettingsSectionTitle("System & Permissions")
+                SettingsSectionTitle(stringResource(R.string.section_system_permissions))
                 SystemPermissionItem(
-                    title = "Battery Optimization",
-                    subtitle = "Required for reliable notifications",
+                    title = stringResource(R.string.setting_battery_optimization),
+                    subtitle = stringResource(R.string.setting_battery_optimization_subtitle),
                     onClick = {
                         try {
                             val intent = Intent().apply {
@@ -178,8 +190,8 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                     }
                 )
                 SystemPermissionItem(
-                    title = "Exact Alarms",
-                    subtitle = "Ensure reminders fire on time",
+                    title = stringResource(R.string.setting_exact_alarms),
+                    subtitle = stringResource(R.string.setting_exact_alarms_subtitle),
                     onClick = {
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                             try {
@@ -196,9 +208,9 @@ fun SettingsScreen(navController: NavController, appViewModel: AppViewModel) {
                 )
             }
             item {
-                SettingsSectionTitle("About")
+                SettingsSectionTitle(stringResource(R.string.section_about))
                 Text(
-                    text = "AttendWise v1.0\nCopyright © 2026 Ankit. All rights reserved.",
+                    text = stringResource(R.string.about_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp)
@@ -213,12 +225,12 @@ fun UserNameDialog(currentName: String, onDismiss: () -> Unit, onNameChange: (St
     var name by remember { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Change Your Name") },
+        title = { Text(stringResource(R.string.dialog_change_name_title)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.label_name)) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(
@@ -232,39 +244,43 @@ fun UserNameDialog(currentName: String, onDismiss: () -> Unit, onNameChange: (St
             Button(
                 onClick = { onNameChange(name) },
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Save") } 
+            ) { Text(stringResource(R.string.action_save)) } 
         },
         dismissButton = { 
             TextButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Cancel") } 
+            ) { Text(stringResource(R.string.action_cancel)) } 
         }
     )
 }
 
 @Composable
 fun ThemeDialog(currentTheme: String, onDismiss: () -> Unit, onThemeSelected: (String) -> Unit) {
-    val themes = listOf("System Default", "Light", "Dark")
+    val themes = listOf(
+        stringResource(R.string.theme_system) to "System Default",
+        stringResource(R.string.theme_light) to "Light",
+        stringResource(R.string.theme_dark) to "Dark"
+    )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose Theme") },
+        title = { Text(stringResource(R.string.dialog_choose_theme_title)) },
         text = {
             Column {
-                themes.forEach { theme ->
+                themes.forEach { (displayTheme, themeValue) ->
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { onThemeSelected(theme) }
+                            .clickable { onThemeSelected(themeValue) }
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = (theme == currentTheme),
-                            onClick = { onThemeSelected(theme) }
+                            selected = (themeValue == currentTheme),
+                            onClick = { onThemeSelected(themeValue) }
                         )
                         Spacer(Modifier.width(16.dp))
-                        Text(theme, style = MaterialTheme.typography.bodyLarge)
+                        Text(displayTheme, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -273,7 +289,7 @@ fun ThemeDialog(currentTheme: String, onDismiss: () -> Unit, onThemeSelected: (S
             TextButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Cancel") } 
+            ) { Text(stringResource(R.string.action_cancel)) } 
         }
     )
 }
@@ -300,8 +316,8 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Sign Out") },
-            text = { Text("Are you sure you want to sign out? Your local data will be cleared, but your cloud backup will remain safe.") },
+            title = { Text(stringResource(R.string.dialog_sign_out_title)) },
+            text = { Text(stringResource(R.string.dialog_sign_out_text)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -309,13 +325,13 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
                         appViewModel.logout()
                     },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Sign Out") }
+                ) { Text(stringResource(R.string.action_sign_out)) }
             },
             dismissButton = { 
                 TextButton(
                     onClick = { showLogoutDialog = false },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Cancel") } 
+                ) { Text(stringResource(R.string.action_cancel)) } 
             }
         )
     }
@@ -346,17 +362,17 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.CloudQueue, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(12.dp))
-                Text("Automatic Backup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.section_cloud_account), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(8.dp))
             
             if (isSyncing) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
-                Text("Syncing with cloud...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.backup_status_syncing), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             } else {
                 val displayMessage = when {
-                    user != null -> "Account: ${user?.email}. Data is automatically synced with the cloud."
-                    else -> errorMessage ?: "Connect an account to backup your data across devices."
+                    user != null -> stringResource(R.string.backup_status_account, user?.email ?: "")
+                    else -> errorMessage ?: stringResource(R.string.backup_status_no_account)
                 }
                 Text(
                     text = displayMessage,
@@ -376,7 +392,7 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
                 ) {
                     Icon(Icons.Default.Login, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Connect Account")
+                    Text(stringResource(R.string.action_connect_account))
                 }
             } else {
                 OutlinedButton(
@@ -388,7 +404,7 @@ fun CloudSettingsItem(appViewModel: AppViewModel) {
                 ) {
                     Icon(Icons.Default.Logout, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Sign Out")
+                    Text(stringResource(R.string.action_sign_out))
                 }
             }
         }
@@ -410,7 +426,7 @@ fun AuthDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isSignUp) "Create Account" else "Sign In") },
+        title = { Text(if (isSignUp) stringResource(R.string.dialog_auth_signup_title) else stringResource(R.string.dialog_auth_signin_title)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (error != null) {
@@ -420,7 +436,7 @@ fun AuthDialog(
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it; error = null },
-                    label = { Text("Email") },
+                    label = { Text(stringResource(R.string.label_email)) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
@@ -430,7 +446,7 @@ fun AuthDialog(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it; error = null },
-                    label = { Text("Password") },
+                    label = { Text(stringResource(R.string.label_password)) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     visualTransformation = PasswordVisualTransformation(),
@@ -443,33 +459,39 @@ fun AuthDialog(
                     modifier = Modifier.align(Alignment.End),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(if (isSignUp) "Already have an account? Sign In" else "Don't have an account? Sign Up")
+                    Text(if (isSignUp) stringResource(R.string.auth_switch_to_signin) else stringResource(R.string.auth_switch_to_signup))
                 }
 
-                if (!isSignUp) {
+                        if (!isSignUp) {
+                    val authEnterEmailReset = stringResource(R.string.auth_enter_email_reset)
+                    val authResetSent = stringResource(R.string.auth_reset_sent)
                     TextButton(
                         onClick = {
                             if (email.isBlank()) {
-                                error = "Enter your email to reset password"
+                                error = authEnterEmailReset
                                 return@TextButton
                             }
                             appViewModel.resetPassword(email) { success, msg ->
-                                error = if (success) "Password reset email sent!" else msg
+                                error = if (success) authResetSent else msg
                             }
                         },
                         modifier = Modifier.align(Alignment.End),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Forgot Password?", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.auth_forgot_password), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         },
         confirmButton = {
+            val fillFieldsError = stringResource(R.string.error_fill_fields)
+            val wrongPasswordError = stringResource(R.string.error_wrong_password)
+            val userNotFoundError = stringResource(R.string.error_user_not_found)
+            val authFailedError = stringResource(R.string.error_auth_failed)
             Button(
                 onClick = {
                     if (email.isBlank() || password.isBlank()) {
-                        error = "Please fill all fields"
+                        error = fillFieldsError
                         return@Button
                     }
                     isLoading = true
@@ -495,9 +517,9 @@ fun AuthDialog(
                                     msg?.contains("auth is incorrect", ignoreCase = true) == true ||
                                     msg?.contains("auth credential is incorrect", ignoreCase = true) == true ||
                                     msg?.contains("invalid-credential", ignoreCase = true) == true ||
-                                    msg?.contains("invalid credential", ignoreCase = true) == true -> "Wrong password. Please try again."
-                                    msg?.contains("user-not-found", ignoreCase = true) == true || msg?.contains("no user", ignoreCase = true) == true -> "No account found with this email."
-                                    else -> msg ?: "Authentication failed"
+                                    msg?.contains("invalid credential", ignoreCase = true) == true -> wrongPasswordError
+                                    msg?.contains("user-not-found", ignoreCase = true) == true || msg?.contains("no user", ignoreCase = true) == true -> userNotFoundError
+                                    else -> msg ?: authFailedError
                                 }
                                 error = finalMsg
                                 onResult(false, finalMsg)
@@ -509,7 +531,7 @@ fun AuthDialog(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Text(if (isSignUp) "Sign Up" else "Sign In")
+                else Text(if (isSignUp) stringResource(R.string.action_sign_up) else stringResource(R.string.action_sign_in))
             }
         },
         dismissButton = {
@@ -517,7 +539,7 @@ fun AuthDialog(
                 onClick = onDismiss, 
                 enabled = !isLoading,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Cancel") }
+            ) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

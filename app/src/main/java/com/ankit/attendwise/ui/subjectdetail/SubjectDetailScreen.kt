@@ -15,7 +15,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EventBusy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +37,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +62,8 @@ import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
 import com.kizitonwose.calendar.core.firstDayOfWeekFromLocale
+import androidx.compose.ui.res.stringResource
+import com.ankit.attendwise.R
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
@@ -81,8 +95,8 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
     if (recordToDelete != null) {
         AlertDialog(
             onDismissRequest = { recordToDelete = null },
-            title = { Text("Delete Record") },
-            text = { Text("Are you sure you want to delete this attendance record?") },
+            title = { Text(stringResource(R.string.dialog_delete_record_title)) },
+            text = { Text(stringResource(R.string.dialog_delete_record_text)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -90,13 +104,13 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                         recordToDelete = null
                     },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Delete") }
+                ) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = { 
                 TextButton(
                     onClick = { recordToDelete = null },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Cancel") } 
+                ) { Text(stringResource(R.string.action_cancel)) } 
             }
         )
     }
@@ -104,8 +118,8 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
     if (clearAllDateRecords != null) {
         AlertDialog(
             onDismissRequest = { clearAllDateRecords = null },
-            title = { Text("Clear Attendance") },
-            text = { Text("Are you sure you want to clear all attendance records for this date?") },
+            title = { Text(stringResource(R.string.dialog_clear_attendance_title)) },
+            text = { Text(stringResource(R.string.dialog_clear_attendance_text)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -113,13 +127,13 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                         clearAllDateRecords = null
                     },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Clear") }
+                ) { Text(stringResource(R.string.action_clear)) }
             },
             dismissButton = { 
                 TextButton(
                     onClick = { clearAllDateRecords = null },
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("Cancel") } 
+                ) { Text(stringResource(R.string.action_cancel)) } 
             }
         )
     }
@@ -170,33 +184,37 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
         )
     }
 
-    // AUTO-EXIT: If subject is deleted via sync, go back to prevent crash
+    // AUTO-EXIT: If subject is deleted via sync, go back to prevent crash.
     LaunchedEffect(subjectWithAttendance) {
         if (subjectWithAttendance == null) {
-            navController.popBackStack()
+            // Give a small grace period to account for DB loading/syncing
+            kotlinx.coroutines.delay(1000)
+            if (subjectWithAttendance == null) {
+                navController.popBackStack()
+            }
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(subjectWithAttendance?.subject?.name ?: "Subject Details") },
+                title = { Text(subjectWithAttendance?.subject?.name ?: stringResource(R.string.subject_details_title)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showManualAddDialog = true }) {
-                        Icon(Icons.Default.PlaylistAdd, contentDescription = "Add Past Records")
+                        Icon(Icons.Default.PlaylistAdd, contentDescription = null)
                     }
                     IconButton(onClick = {
                         navController.navigate("edit_subject/${subjectId}")
                     }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
                     }
                     IconButton(onClick = { showDeleteDialog = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             )
@@ -223,7 +241,7 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
                 }
 
                 Text(
-                    "Attendance History",
+                    stringResource(R.string.attendance_history_label),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -241,19 +259,19 @@ fun SubjectDetailScreen(subjectId: String, navController: NavController, appView
 fun DeleteConfirmationDialog(subjectName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete Subject") },
-        text = { Text("Are you sure you want to delete '$subjectName'? This will also delete all its attendance records and schedules.") },
+        title = { Text(stringResource(R.string.dialog_delete_subject_title)) },
+        text = { Text(stringResource(R.string.dialog_delete_subject_text, subjectName)) },
         confirmButton = {
             Button(
                 onClick = onConfirm,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Delete") }
+            ) { Text(stringResource(R.string.action_delete)) }
         },
         dismissButton = { 
             TextButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Cancel") } 
+            ) { Text(stringResource(R.string.action_cancel)) } 
         }
     )
 }
@@ -265,21 +283,21 @@ fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present: Int, a
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Past Attendance") },
+        title = { Text(stringResource(R.string.dialog_manual_add_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Enter the number of classes you've already attended or missed.")
+                Text(stringResource(R.string.dialog_manual_add_text))
                 OutlinedTextField(
                     value = presentCount,
                     onValueChange = { if (it.all { char -> char.isDigit() }) presentCount = it },
-                    label = { Text("Total Attended (Present)") },
+                    label = { Text(stringResource(R.string.label_attended_present)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = absentCount,
                     onValueChange = { if (it.all { char -> char.isDigit() }) absentCount = it },
-                    label = { Text("Total Missed (Absent)") },
+                    label = { Text(stringResource(R.string.label_missed_absent)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -289,13 +307,13 @@ fun ManualAddAttendanceDialog(onDismiss: () -> Unit, onConfirm: (present: Int, a
             Button(
                 onClick = { onConfirm(presentCount.toIntOrNull() ?: 0, absentCount.toIntOrNull() ?: 0) },
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Add Records") }
+            ) { Text(stringResource(R.string.action_add_records)) }
         },
         dismissButton = { 
             TextButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Cancel") } 
+            ) { Text(stringResource(R.string.action_cancel)) } 
         }
     )
 }
@@ -329,7 +347,7 @@ fun MarkAttendanceDialog(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "This day is marked as a Public Holiday. Alarms are disabled and attendance cannot be marked.",
+                                text = stringResource(R.string.holiday_info_text),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = HolidayYellow,
                                 fontWeight = FontWeight.Bold
@@ -341,7 +359,7 @@ fun MarkAttendanceDialog(
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = HolidayYellow),
                                 border = BorderStroke(1.dp, HolidayYellow)
                             ) {
-                                Text("Remove Holiday")
+                                Text(stringResource(R.string.action_remove) + " " + stringResource(R.string.mark_holiday))
                             }
                         }
                     }
@@ -362,9 +380,9 @@ fun MarkAttendanceDialog(
                         ) {
                             Column {
                                 val status = when {
-                                    record.type == RecordType.CANCELLED -> "Cancelled"
-                                    record.isPresent -> "Present"
-                                    else -> "Absent"
+                                    record.type == RecordType.CANCELLED -> stringResource(R.string.mark_cancelled)
+                                    record.isPresent -> stringResource(R.string.mark_present)
+                                    else -> stringResource(R.string.mark_absent)
                                 }
                                 val color = when {
                                     record.type == RecordType.CANCELLED -> MaterialTheme.colorScheme.outline
@@ -377,7 +395,7 @@ fun MarkAttendanceDialog(
                                 }
                             }
                             IconButton(onClick = { onDeleteRecord(record.id) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -386,8 +404,8 @@ fun MarkAttendanceDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 Text("Quick Actions", style = MaterialTheme.typography.labelLarge, color = if (isHoliday) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f) else MaterialTheme.colorScheme.primary)
-                AttendanceActionRow(Icons.Default.CheckCircle, "Mark Present", { onConfirm(true); onDismiss() }, true, enabled = !isHoliday)
-                AttendanceActionRow(Icons.Default.Cancel, "Mark Absent", { onConfirm(false); onDismiss() }, false, enabled = !isHoliday)
+                AttendanceActionRow(Icons.Default.CheckCircle, stringResource(R.string.mark_present), { onConfirm(true); onDismiss() }, true, enabled = !isHoliday)
+                AttendanceActionRow(Icons.Default.Cancel, stringResource(R.string.mark_absent), { onConfirm(false); onDismiss() }, false, enabled = !isHoliday)
                 AttendanceActionRow(Icons.Default.AddCircle, "Add Extra Class (Present)", { onAddExtra(true); onDismiss() }, true, enabled = !isHoliday)
                 AttendanceActionRow(Icons.Default.RemoveCircle, "Add Extra Class (Absent)", { onAddExtra(false); onDismiss() }, false, enabled = !isHoliday)
                 AttendanceActionRow(Icons.Default.EventBusy, "Mark as Cancelled", { onConfirmCancelled(); onDismiss() }, false, MaterialTheme.colorScheme.outline, enabled = !isHoliday)
@@ -398,13 +416,13 @@ fun MarkAttendanceDialog(
                 onClick = onDeleteMain,
                 shape = RoundedCornerShape(12.dp),
                 enabled = recordsForDay.isNotEmpty()
-            ) { Text("Clear Day") }
+            ) { Text(stringResource(R.string.action_clear_day)) }
         },
         dismissButton = { 
             TextButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Close") } 
+            ) { Text(stringResource(R.string.action_close)) } 
         }
     )
 }
@@ -453,7 +471,7 @@ fun AttendanceProgressCard(subjectWithAttendance: SubjectWithAttendance) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Target: ${subjectWithAttendance.subject.targetAttendance}%",
+                    text = stringResource(R.string.label_attendance_target) + ": ${subjectWithAttendance.subject.targetAttendance}%",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -475,9 +493,9 @@ fun AttendanceStatsCard(subjectWithAttendance: SubjectWithAttendance) {
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            StatItem("Total", subjectWithAttendance.totalClasses.toString(), MaterialTheme.colorScheme.primary)
-            StatItem("Attended", subjectWithAttendance.presentClasses.toString(), SuccessGreen)
-            StatItem("Missed", (subjectWithAttendance.totalClasses - subjectWithAttendance.presentClasses).toString(), ErrorRed)
+            StatItem(stringResource(R.string.stat_total), subjectWithAttendance.totalClasses.toString(), MaterialTheme.colorScheme.primary)
+            StatItem(stringResource(R.string.stat_attended), subjectWithAttendance.presentClasses.toString(), SuccessGreen)
+            StatItem(stringResource(R.string.stat_missed), (subjectWithAttendance.totalClasses - subjectWithAttendance.presentClasses).toString(), ErrorRed)
         }
     }
 }
@@ -494,13 +512,13 @@ fun StatItem(label: String, value: String, color: Color) {
 fun BunkAnalysisCard(analysis: BunkAnalysis, subject: Subject) {
     val (text, color) = when {
         analysis.classesToBunk > 0 -> {
-            "You can bunk ${analysis.classesToBunk} classes while staying above your ${subject.targetAttendance}% target." to SuccessGreen
+            stringResource(R.string.bunk_analysis_safe_extended, analysis.classesToBunk, subject.targetAttendance) to SuccessGreen
         }
         analysis.classesToAttend > 0 -> {
-            "You must attend the next ${analysis.classesToAttend} classes to reach your ${subject.targetAttendance}% target." to ErrorRed
+            stringResource(R.string.bunk_analysis_risk_extended, analysis.classesToAttend, subject.targetAttendance) to ErrorRed
         }
         else -> {
-            "You are exactly on track to meet your ${subject.targetAttendance}% target!" to MaterialTheme.colorScheme.primary
+            stringResource(R.string.bunk_analysis_on_track_extended, subject.targetAttendance) to MaterialTheme.colorScheme.primary
         }
     }
 
@@ -575,7 +593,10 @@ fun AttendanceCalendar(
     )
 
     val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val locale = configuration.locales[0]
 
+    // PERFORMANCE FIX: Pre-process records into a Map for O(1) lookup during day rendering
     val recordsByDate = remember(subjectRecords) {
         subjectRecords.groupBy { it.date }
     }
@@ -599,7 +620,7 @@ fun AttendanceCalendar(
             }
 
             Text(
-                text = state.firstVisibleMonth.yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + state.firstVisibleMonth.yearMonth.year,
+                text = state.firstVisibleMonth.yearMonth.month.getDisplayName(TextStyle.FULL, locale) + " " + state.firstVisibleMonth.yearMonth.year,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )

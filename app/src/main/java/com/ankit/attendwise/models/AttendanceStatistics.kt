@@ -1,5 +1,8 @@
 package com.ankit.attendwise.models
 
+import androidx.annotation.Keep
+
+@Keep
 data class AttendanceStatistics(
     val totalClasses: Int,
     val totalPresent: Int,
